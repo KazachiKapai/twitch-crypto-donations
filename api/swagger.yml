@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+  title: Twitch Crypto Donations API
+  description: API for registering wallet addresses and generating donation URLs
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+    description: Production server
+  - url: http://localhost:8080
+    description: Development server
+
+paths:
+  /api/register:
+    post:
+      summary: Register a wallet address
+      description: Registers a new wallet address or returns existing donation URL if wallet is already registered
+      operationId: registerWallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - wallet
+              properties:
+                wallet:
+                  type: string
+                  description: The crypto wallet address to register
+                  example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+      responses:
+        '201':
+          description: Wallet successfully registered and donation URL created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  donation_url:
+                    type: string
+                    description: The generated donation URL for the wallet
+                    example: "https://donate.example.com/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        '409':
+          description: Wallet already registered, returning existing donation URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  donation_url:
+                    type: string
+                    description: The existing donation URL for the wallet
+                    example: "https://donate.example.com/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        '400':
+          description: Bad request - invalid wallet format or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Internal server error"
+        code:
+          type: string
+          description: Error code
+          example: "INTERNAL_ERROR"

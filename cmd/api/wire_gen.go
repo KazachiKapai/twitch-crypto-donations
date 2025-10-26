@@ -10,7 +10,6 @@ import (
 	"context"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/config"
-	"twitch-crypto-donations/internal/pkg/database"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
@@ -19,8 +18,41 @@ import (
 // Injectors from wire.go:
 
 func InitializeServer(ctx context.Context) (*server.Server, error) {
-	databaseDatabase := database.New()
-	handler := register.New(databaseDatabase)
+	dbHost, err := environment.GetDBHost()
+	if err != nil {
+		return nil, err
+	}
+	dbPort, err := environment.GetDBPort()
+	if err != nil {
+		return nil, err
+	}
+	dbUser, err := environment.GetDBUser()
+	if err != nil {
+		return nil, err
+	}
+	dbPassword, err := environment.GetDBPassword()
+	if err != nil {
+		return nil, err
+	}
+	dbName, err := environment.GetDBName()
+	if err != nil {
+		return nil, err
+	}
+	dbsslMode, err := environment.GetDBSSLMode()
+	if err != nil {
+		return nil, err
+	}
+	connectionString := config.NewConnectionString(dbHost, dbPort, dbUser, dbPassword, dbName, dbsslMode)
+	migrationsDir, err := environment.GetMigrationsDir()
+	if err != nil {
+		return nil, err
+	}
+	db := config.NewDatabase(connectionString, migrationsDir)
+	donationUrlPrefix, err := environment.GetDonationUrlPrefix()
+	if err != nil {
+		return nil, err
+	}
+	handler := register.New(db, donationUrlPrefix)
 	handlers := router.Handlers{
 		Register: handler,
 	}
@@ -28,7 +60,15 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := config.NewMiddlewares()
+	appEnv, err := environment.GetAppEnv()
+	if err != nil {
+		return nil, err
+	}
+	swaggerPath, err := environment.GetSwaggerPath()
+	if err != nil {
+		return nil, err
+	}
+	v := config.NewMiddlewares(appEnv, swaggerPath)
 	engine := config.NewEngine(handlers, routePrefix, v)
 	httpListenPort, err := environment.GetHTTPListenPort()
 	if err != nil {

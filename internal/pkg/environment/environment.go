@@ -18,6 +18,12 @@ type (
 	DBPassword string
 	DBName     string
 	DBSSLMode  string
+
+	MigrationsDir string
+
+	DonationUrlPrefix string
+
+	SwaggerPath string
 )
 
 func getEnv(key string) (string, error) {
@@ -73,6 +79,21 @@ func GetDBSSLMode() (DBSSLMode, error) {
 	return DBSSLMode(val), err
 }
 
+func GetMigrationsDir() (MigrationsDir, error) {
+	val, err := getEnv("POSTGRES_MIGRATIONS_DIR")
+	return MigrationsDir(val), err
+}
+
+func GetDonationUrlPrefix() (DonationUrlPrefix, error) {
+	val, err := getEnv("DONATION_URL_PREFIX")
+	return DonationUrlPrefix(val), err
+}
+
+func GetSwaggerPath() (SwaggerPath, error) {
+	val, err := getEnv("SWAGGER_PATH")
+	return SwaggerPath(val), err
+}
+
 var WireSet = wire.NewSet(
 	GetHTTPListenPort,
 	GetRoutePrefix,
@@ -83,4 +104,7 @@ var WireSet = wire.NewSet(
 	GetDBPassword,
 	GetDBName,
 	GetDBSSLMode,
+	GetMigrationsDir,
+	GetDonationUrlPrefix,
+	GetSwaggerPath,
 )
