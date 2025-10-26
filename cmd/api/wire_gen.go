@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"twitch-crypto-donations/internal/app/register"
+	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/config"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/router"
@@ -54,8 +55,10 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	handler := register.New(db, client, obsServiceDomain)
+	senddonateHandler := senddonate.New(db, client, obsServiceDomain)
 	handlers := router.Handlers{
-		Register: handler,
+		Register:   handler,
+		SendDonate: senddonateHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
 	if err != nil {

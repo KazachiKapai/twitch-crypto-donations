@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Twitch Crypto Donations API
-  description: API for registering wallet addresses and generating donation URLs
+  description: API for registering wallet addresses and sending donation alerts to streamers
   version: 1.0.0
 servers:
   - url: http://localhost:8080
@@ -13,6 +13,8 @@ paths:
       summary: Register a wallet address
       description: Registers a new wallet address or returns existing donation URL if wallet is already registered
       operationId: registerWallet
+      tags:
+        - Registration
       requestBody:
         required: true
         content:
@@ -62,8 +64,137 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/send-donate:
+    post:
+      summary: Send a donation alert
+      description: Sends a donation alert to the streamer's OBS overlay. The donation must include an audio URL and will be displayed with the provided text, username, and amount.
+      operationId: sendDonate
+      tags:
+        - Donations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DonationRequest'
+            examples:
+              basic:
+                summary: Basic donation with audio
+                value:
+                  wallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                  username: "CryptoWhale"
+                  amount: 2.5
+                  currency: "SOL"
+                  text: "GM! To the moon 🚀"
+                  audio_url: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+                  duration_ms: 7000
+                  layout: "default"
+              withImage:
+                summary: Donation with image
+                value:
+                  wallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                  username: "DiamondHands"
+                  amount: 10.0
+                  currency: "ETH"
+                  text: "HODL! 💎🙌"
+                  audio_url: "https://storage.googleapis.com/your-bucket/tts_456.mp3"
+                  image_url: "https://images.example.com/diamond.png"
+                  duration_ms: 5000
+                  layout: "default"
+      responses:
+        '204':
+          description: Donation successfully sent to streamer's OBS overlay
+        '404':
+          description: Wallet not found - the wallet address is not registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Wallet not found"
+                code: "WALLET_NOT_FOUND"
+        '400':
+          description: Bad request - invalid request body or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Request validation failed"
+                details: "audio_url is required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
+    DonationRequest:
+      type: object
+      required:
+        - wallet
+        - username
+        - amount
+        - currency
+        - text
+        - audio_url
+        - duration_ms
+        - layout
+      properties:
+        wallet:
+          type: string
+          description: The recipient's wallet address (must be registered)
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        username:
+          type: string
+          description: The donor's username to display
+          minLength: 1
+          maxLength: 50
+          example: "CryptoWhale"
+        amount:
+          type: number
+          format: double
+          description: The donation amount
+          minimum: 0
+          exclusiveMinimum: true
+          example: 2.5
+        currency:
+          type: string
+          description: The cryptocurrency used for donation
+          enum: [SOL, ETH, BTC, USDC, USDT]
+          example: "SOL"
+        text:
+          type: string
+          description: The donation message to display
+          minLength: 1
+          maxLength: 500
+          example: "GM! To the moon 🚀"
+        audio_url:
+          type: string
+          format: uri
+          description: URL to the audio file (TTS or uploaded) - REQUIRED
+          example: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+        image_url:
+          type: string
+          format: uri
+          description: Optional URL to an image to display with the donation
+          example: "https://images.example.com/avatar.png"
+        duration_ms:
+          type: number
+          format: double
+          description: Duration in milliseconds for how long to show the alert
+          minimum: 1000
+          maximum: 60000
+          example: 7000
+        layout:
+          type: string
+          description: The layout style for the donation alert
+          enum: [default, minimal, banner, fullscreen]
+          default: default
+          example: "default"
+
     Error:
       type: object
       properties:
@@ -75,3 +206,7 @@ components:
           type: string
           description: Error code
           example: "INTERNAL_ERROR"
+        details:
+          type: string
+          description: Additional error details
+          example: "Database connection failed"

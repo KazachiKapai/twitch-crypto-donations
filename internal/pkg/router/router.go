@@ -2,6 +2,7 @@ package router
 
 import (
 	"twitch-crypto-donations/internal/app/register"
+	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
 
@@ -12,7 +13,8 @@ import (
 )
 
 type Handlers struct {
-	Register *register.Handler
+	Register   *register.Handler
+	SendDonate *senddonate.Handler
 }
 
 func New(
@@ -34,6 +36,7 @@ func New(
 	api := engine.Group(string(routePrefix))
 	{
 		api.POST("/register", middleware.New(handlers.Register).Handle)
+		api.POST("/send-donate", middleware.New(handlers.SendDonate).Handle)
 	}
 
 	return engine

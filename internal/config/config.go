@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"twitch-crypto-donations/internal/app/register"
+	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
 	"twitch-crypto-donations/internal/pkg/router"
@@ -87,9 +88,13 @@ func NewServer(engine *gin.Engine, listenPort environment.HTTPListenPort) *serve
 var WireSet = wire.NewSet(
 	environment.WireSet,
 	register.New,
+	senddonate.New,
 
 	wire.Bind(new(register.HttpClient), new(*http.Client)),
 	wire.Bind(new(register.Database), new(*sql.DB)),
+	wire.Bind(new(senddonate.HttpClient), new(*http.Client)),
+	wire.Bind(new(senddonate.Database), new(*sql.DB)),
+
 	wire.Struct(new(router.Handlers), "*"),
 
 	NewConnectionString,

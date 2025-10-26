@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/gin-gonic/gin v1.11.0
+	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/lib/pq v1.10.9
 	github.com/pressly/goose/v3 v3.26.0
