@@ -4,18 +4,18 @@ info:
   description: API for registering wallet addresses and sending donation alerts to streamers
   version: 1.0.0
 servers:
-  - url: https://obs-alerts-802275279509.us-central1.run.app
+  - url: https://twitch-crypto-api-h3reiljepq-uc.a.run.app
     description: Test server
   - url: http://localhost:8080
     description: Development server
 
 paths:
-  /api/register:
+  /api/set-obs-webhooks:
     post:
-      summary: Register a wallet address
-      description: Registers a new wallet address or returns existing donation URL if wallet is already registered
+      summary: Register streamer in OBS service
+      description: Registers stream in OBS service and returns existing donation URL if wallet is already registered
       tags:
-        - Registration
+        - OBS Service
       requestBody:
         required: true
         content:
@@ -27,7 +27,7 @@ paths:
               properties:
                 wallet:
                   type: string
-                  description: The crypto wallet address to register
+                  description: The crypto wallet address to setobswebhooks
                   example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
       responses:
         '201':
@@ -188,6 +188,59 @@ paths:
         '500':
           description: Internal server error
 
+  /api/confirm-payment:
+    post:
+      summary: Confirm Solana Payment
+      description: Checks the Solana blockchain for a specific transaction signature and confirms it was successful.
+      tags:
+        - Donations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentConfirmationRequest'
+      responses:
+        '200':
+          description: Transaction found, confirmed, and successful.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentConfirmationResponse'
+        '400':
+          description: Bad request - invalid transaction signature format.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "invalid signature format: illegal base58 data"
+                code: "INVALID_SIGNATURE"
+        '404':
+          description: Transaction not found or not yet confirmed by the network.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "transaction not found or not yet confirmed by the network"
+                code: "TX_NOT_FOUND"
+        '409':
+          description: Transaction was found but failed on-chain (tx.Meta.Err != nil).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Transaction failed with error: InstructionError(...)"
+                code: "TX_FAILED"
+        '500':
+          description: Internal server or RPC error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
     VerifySignatureRequest:
@@ -278,6 +331,46 @@ components:
           enum: [default, minimal, banner, fullscreen]
           default: default
           example: "default"
+
+    PaymentConfirmationRequest:
+      type: object
+      required:
+        - signature
+        - recipient
+        - sol_amount
+      properties:
+        signature:
+          type: string
+          description: The Base58-encoded Solana transaction signature.
+          example: "4vK9hL9tB5wYJ2M3X4C5V6B7H8G9D0S1F2E3A4Z5X6C7V8B9N0M1L2K3J4H5G6F7D8S9A0"
+        recipient:
+          type: string
+          description: The expected recipient Solana public key address (for verification).
+          example: "H8T7iF7G9D0S1F2E3A4Z5X6C7V8B9N0M1L2K3J4H5G6F7D8S9A0kU1"
+        sol_amount:
+          type: string
+          description: The expected amount of SOL in the transaction (as a string).
+          example: "0.5"
+
+    PaymentConfirmationResponse:
+      type: object
+      required:
+        - confirmed
+        - message
+      properties:
+        confirmed:
+          type: boolean
+          description: True if the transaction was confirmed and successful.
+          example: true
+        message:
+          type: string
+          description: Status message.
+          example: "Transaction successfully confirmed on Solana."
+        slot:
+          type: integer
+          format: int64
+          description: The slot number the transaction was confirmed in.
+          example: 210000000
 
     Error:
       type: object

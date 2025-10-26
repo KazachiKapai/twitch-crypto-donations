@@ -28,6 +28,8 @@ type (
 
 	JwtSecret            string
 	TokenExpirationHours int
+
+	RpcEndpoint string
 )
 
 func getEnv(key string) (string, error) {
@@ -113,6 +115,11 @@ func GetTokenExpirationHours() (TokenExpirationHours, error) {
 	return TokenExpirationHours(rv), err
 }
 
+func GetRpcEndpoint() (RpcEndpoint, error) {
+	val, err := getEnv("RPC_ENDPOINT")
+	return RpcEndpoint(val), err
+}
+
 var WireSet = wire.NewSet(
 	GetHTTPListenPort,
 	GetRoutePrefix,
@@ -128,4 +135,5 @@ var WireSet = wire.NewSet(
 	GetOBSServiceDomain,
 	GetJwtSecret,
 	GetTokenExpirationHours,
+	GetRpcEndpoint,
 )

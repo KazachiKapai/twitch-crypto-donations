@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 	"twitch-crypto-donations/internal/app/noncegeneration"
-	"twitch-crypto-donations/internal/app/register"
+	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
+	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/jwt"
@@ -17,6 +18,7 @@ import (
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
 
+	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/pressly/goose/v3"
@@ -30,6 +32,10 @@ type (
 
 func NewHttpClient() *http.Client {
 	return &http.Client{}
+}
+
+func NewRpcClient(rpcEndpoint environment.RpcEndpoint) *rpc.Client {
+	return rpc.New(string(rpcEndpoint))
 }
 
 func NewDatabase(connString ConnectionString, dir environment.MigrationsDir) *sql.DB {
@@ -126,19 +132,22 @@ var WireSet = wire.NewSet(
 	jwt.New,
 	signatureverification.New,
 	noncegeneration.New,
-	register.New,
+	setobswebhooks.New,
 	senddonate.New,
+	paymentconfirmation.New,
 
+	wire.Bind(new(paymentconfirmation.RpcClient), new(*rpc.Client)),
 	wire.Bind(new(noncegeneration.Database), new(*sql.DB)),
 	wire.Bind(new(signatureverification.JwtManager), new(*jwt.Manager)),
 	wire.Bind(new(signatureverification.Database), new(*sql.DB)),
-	wire.Bind(new(register.HttpClient), new(*http.Client)),
-	wire.Bind(new(register.Database), new(*sql.DB)),
+	wire.Bind(new(setobswebhooks.HttpClient), new(*http.Client)),
+	wire.Bind(new(setobswebhooks.Database), new(*sql.DB)),
 	wire.Bind(new(senddonate.HttpClient), new(*http.Client)),
 	wire.Bind(new(senddonate.Database), new(*sql.DB)),
 
 	wire.Struct(new(router.Handlers), "*"),
 
+	NewRpcClient,
 	NewConnectionString,
 	NewDatabase,
 	NewHttpClient,

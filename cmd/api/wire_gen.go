@@ -9,7 +9,8 @@ package main
 import (
 	"context"
 	"twitch-crypto-donations/internal/app/noncegeneration"
-	"twitch-crypto-donations/internal/app/register"
+	"twitch-crypto-donations/internal/app/paymentconfirmation"
+	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/config"
@@ -57,9 +58,15 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	handler := register.New(db, client, obsServiceDomain)
+	handler := setobswebhooks.New(db, client, obsServiceDomain)
 	senddonateHandler := senddonate.New(db, client, obsServiceDomain)
 	noncegenerationHandler := noncegeneration.New(db)
+	rpcEndpoint, err := environment.GetRpcEndpoint()
+	if err != nil {
+		return nil, err
+	}
+	rpcClient := config.NewRpcClient(rpcEndpoint)
+	paymentconfirmationHandler := paymentconfirmation.New(rpcClient)
 	tokenExpirationHours, err := environment.GetTokenExpirationHours()
 	if err != nil {
 		return nil, err
@@ -74,6 +81,7 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		Register:              handler,
 		SendDonate:            senddonateHandler,
 		NonceGenerator:        noncegenerationHandler,
+		PaymentConfirmation:   paymentconfirmationHandler,
 		SignatureVerification: signatureverificationHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
