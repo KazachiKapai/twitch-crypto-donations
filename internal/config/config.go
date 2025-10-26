@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
@@ -20,6 +21,10 @@ import (
 type (
 	ConnectionString string
 )
+
+func NewHttpClient() *http.Client {
+	return &http.Client{}
+}
 
 func NewDatabase(connString ConnectionString, dir environment.MigrationsDir) *sql.DB {
 	db, err := sql.Open("postgres", string(connString))
@@ -83,11 +88,13 @@ var WireSet = wire.NewSet(
 	environment.WireSet,
 	register.New,
 
+	wire.Bind(new(register.HttpClient), new(*http.Client)),
 	wire.Bind(new(register.Database), new(*sql.DB)),
 	wire.Struct(new(router.Handlers), "*"),
 
 	NewConnectionString,
 	NewDatabase,
+	NewHttpClient,
 	NewMiddlewares,
 	NewEngine,
 	NewServer,

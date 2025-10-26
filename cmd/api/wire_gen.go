@@ -48,11 +48,12 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	db := config.NewDatabase(connectionString, migrationsDir)
-	donationUrlPrefix, err := environment.GetDonationUrlPrefix()
+	client := config.NewHttpClient()
+	obsServiceDomain, err := environment.GetOBSServiceDomain()
 	if err != nil {
 		return nil, err
 	}
-	handler := register.New(db, donationUrlPrefix)
+	handler := register.New(db, client, obsServiceDomain)
 	handlers := router.Handlers{
 		Register: handler,
 	}

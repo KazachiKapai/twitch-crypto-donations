@@ -21,9 +21,9 @@ type (
 
 	MigrationsDir string
 
-	DonationUrlPrefix string
-
 	SwaggerPath string
+
+	OBSServiceDomain string
 )
 
 func getEnv(key string) (string, error) {
@@ -84,14 +84,14 @@ func GetMigrationsDir() (MigrationsDir, error) {
 	return MigrationsDir(val), err
 }
 
-func GetDonationUrlPrefix() (DonationUrlPrefix, error) {
-	val, err := getEnv("DONATION_URL_PREFIX")
-	return DonationUrlPrefix(val), err
-}
-
 func GetSwaggerPath() (SwaggerPath, error) {
 	val, err := getEnv("SWAGGER_PATH")
 	return SwaggerPath(val), err
+}
+
+func GetOBSServiceDomain() (OBSServiceDomain, error) {
+	val, err := getEnv("OBS_SERVICE_DOMAIN")
+	return OBSServiceDomain(val), err
 }
 
 var WireSet = wire.NewSet(
@@ -105,6 +105,6 @@ var WireSet = wire.NewSet(
 	GetDBName,
 	GetDBSSLMode,
 	GetMigrationsDir,
-	GetDonationUrlPrefix,
 	GetSwaggerPath,
+	GetOBSServiceDomain,
 )
