@@ -57,8 +57,8 @@ func NewConnectionString(
 	return ConnectionString(connStr)
 }
 
-func NewEngine(handlers router.Handlers, prefixRouter environment.RoutePrefix, middlewares []gin.HandlerFunc) *gin.Engine {
-	return router.New(gin.New(), handlers, string(prefixRouter), middlewares...)
+func NewEngine(handlers router.Handlers, prefixRouter environment.RoutePrefix, swaggerPath environment.SwaggerPath, middlewares []gin.HandlerFunc) *gin.Engine {
+	return router.New(gin.New(), handlers, prefixRouter, swaggerPath, middlewares...)
 }
 
 func NewMiddlewares(appEnv environment.AppEnv, path environment.SwaggerPath) []gin.HandlerFunc {

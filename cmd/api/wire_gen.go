@@ -60,16 +60,16 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	appEnv, err := environment.GetAppEnv()
-	if err != nil {
-		return nil, err
-	}
 	swaggerPath, err := environment.GetSwaggerPath()
 	if err != nil {
 		return nil, err
 	}
+	appEnv, err := environment.GetAppEnv()
+	if err != nil {
+		return nil, err
+	}
 	v := config.NewMiddlewares(appEnv, swaggerPath)
-	engine := config.NewEngine(handlers, routePrefix, v)
+	engine := config.NewEngine(handlers, routePrefix, swaggerPath, v)
 	httpListenPort, err := environment.GetHTTPListenPort()
 	if err != nil {
 		return nil, err

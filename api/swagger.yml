@@ -4,8 +4,6 @@ info:
   description: API for registering wallet addresses and generating donation URLs
   version: 1.0.0
 servers:
-  - url: https://api.example.com
-    description: Production server
   - url: http://localhost:8080
     description: Development server
 
