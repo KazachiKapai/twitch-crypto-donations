@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
+	"time"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/pkg/environment"
@@ -28,13 +30,32 @@ func NewHttpClient() *http.Client {
 }
 
 func NewDatabase(connString ConnectionString, dir environment.MigrationsDir) *sql.DB {
-	db, err := sql.Open("postgres", string(connString))
-	if err != nil {
-		panic(err)
+	log.Printf("DEBUG: Connection string: %s", string(connString))
+
+	var db *sql.DB
+	var err error
+
+	for i := 0; i < 10; i++ {
+		db, err = sql.Open("postgres", string(connString))
+		if err != nil {
+			log.Printf("Attempt %d: Failed to open DB: %v", i+1, err)
+			time.Sleep(time.Second * time.Duration(i+1))
+			continue
+		}
+
+		err = db.Ping()
+		if err == nil {
+			log.Printf("Successfully connected to database on attempt %d", i+1)
+			break
+		}
+
+		log.Printf("Attempt %d: Failed to ping DB: %v", i+1, err)
+		db.Close()
+		time.Sleep(time.Second * time.Duration(i+1))
 	}
 
-	if err = db.Ping(); err != nil {
-		panic(fmt.Errorf("failed to connect to DB: %w", err))
+	if err != nil {
+		panic(fmt.Errorf("failed to connect to DB after 10 attempts: %w", err))
 	}
 
 	if err = goose.SetDialect("postgres"); err != nil {
@@ -56,10 +77,22 @@ func NewConnectionString(
 	dbName environment.DBName,
 	dbSSLMode environment.DBSSLMode,
 ) ConnectionString {
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbName, dbSSLMode,
-	)
+	hostStr := string(host)
+
+	var connStr string
+
+	if strings.HasPrefix(hostStr, "/") {
+		connStr = fmt.Sprintf(
+			"host=%s user=%s password=%s dbname=%s sslmode=%s",
+			hostStr, user, password, dbName, dbSSLMode,
+		)
+	} else {
+		connStr = fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			hostStr, port, user, password, dbName, dbSSLMode,
+		)
+	}
+
 	return ConnectionString(connStr)
 }
 
