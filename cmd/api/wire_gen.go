@@ -8,10 +8,13 @@ package main
 
 import (
 	"context"
+	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/app/senddonate"
+	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/config"
 	"twitch-crypto-donations/internal/pkg/environment"
+	"twitch-crypto-donations/internal/pkg/jwt"
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
 )
@@ -56,9 +59,22 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	}
 	handler := register.New(db, client, obsServiceDomain)
 	senddonateHandler := senddonate.New(db, client, obsServiceDomain)
+	noncegenerationHandler := noncegeneration.New(db)
+	tokenExpirationHours, err := environment.GetTokenExpirationHours()
+	if err != nil {
+		return nil, err
+	}
+	jwtSecret, err := environment.GetJwtSecret()
+	if err != nil {
+		return nil, err
+	}
+	manager := jwt.New(tokenExpirationHours, jwtSecret)
+	signatureverificationHandler := signatureverification.New(db, manager)
 	handlers := router.Handlers{
-		Register:   handler,
-		SendDonate: senddonateHandler,
+		Register:              handler,
+		SendDonate:            senddonateHandler,
+		NonceGenerator:        noncegenerationHandler,
+		SignatureVerification: signatureverificationHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
 	if err != nil {

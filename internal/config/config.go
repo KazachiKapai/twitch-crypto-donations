@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/app/senddonate"
+	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/pkg/environment"
+	"twitch-crypto-donations/internal/pkg/jwt"
 	"twitch-crypto-donations/internal/pkg/middleware"
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
@@ -120,9 +123,15 @@ func NewServer(engine *gin.Engine, listenPort environment.HTTPListenPort) *serve
 
 var WireSet = wire.NewSet(
 	environment.WireSet,
+	jwt.New,
+	signatureverification.New,
+	noncegeneration.New,
 	register.New,
 	senddonate.New,
 
+	wire.Bind(new(noncegeneration.Database), new(*sql.DB)),
+	wire.Bind(new(signatureverification.JwtManager), new(*jwt.Manager)),
+	wire.Bind(new(signatureverification.Database), new(*sql.DB)),
 	wire.Bind(new(register.HttpClient), new(*http.Client)),
 	wire.Bind(new(register.Database), new(*sql.DB)),
 	wire.Bind(new(senddonate.HttpClient), new(*http.Client)),

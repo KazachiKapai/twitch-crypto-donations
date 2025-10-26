@@ -1,8 +1,10 @@
 package router
 
 import (
+	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/register"
 	"twitch-crypto-donations/internal/app/senddonate"
+	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
 
@@ -13,8 +15,10 @@ import (
 )
 
 type Handlers struct {
-	Register   *register.Handler
-	SendDonate *senddonate.Handler
+	Register              *register.Handler
+	SendDonate            *senddonate.Handler
+	NonceGenerator        *noncegeneration.Handler
+	SignatureVerification *signatureverification.Handler
 }
 
 func New(
@@ -35,6 +39,8 @@ func New(
 
 	api := engine.Group(string(routePrefix))
 	{
+		api.POST("/generate-nonce", middleware.New(handlers.NonceGenerator).Handle)
+		api.POST("/verify-signature", middleware.New(handlers.SignatureVerification).Handle)
 		api.POST("/register", middleware.New(handlers.Register).Handle)
 		api.POST("/send-donate", middleware.New(handlers.SendDonate).Handle)
 	}

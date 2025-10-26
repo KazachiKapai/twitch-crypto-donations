@@ -4,6 +4,8 @@ info:
   description: API for registering wallet addresses and sending donation alerts to streamers
   version: 1.0.0
 servers:
+  - url: https://obs-alerts-802275279509.us-central1.run.app
+    description: Test server
   - url: http://localhost:8080
     description: Development server
 
@@ -12,7 +14,6 @@ paths:
     post:
       summary: Register a wallet address
       description: Registers a new wallet address or returns existing donation URL if wallet is already registered
-      operationId: registerWallet
       tags:
         - Registration
       requestBody:
@@ -68,7 +69,6 @@ paths:
     post:
       summary: Send a donation alert
       description: Sends a donation alert to the streamer's OBS overlay. The donation must include an audio URL and will be displayed with the provided text, username, and amount.
-      operationId: sendDonate
       tags:
         - Donations
       requestBody:
@@ -88,18 +88,6 @@ paths:
                   text: "GM! To the moon 🚀"
                   audio_url: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
                   duration_ms: 7000
-                  layout: "default"
-              withImage:
-                summary: Donation with image
-                value:
-                  wallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
-                  username: "DiamondHands"
-                  amount: 10.0
-                  currency: "ETH"
-                  text: "HODL! 💎🙌"
-                  audio_url: "https://storage.googleapis.com/your-bucket/tts_456.mp3"
-                  image_url: "https://images.example.com/diamond.png"
-                  duration_ms: 5000
                   layout: "default"
       responses:
         '204':
@@ -129,8 +117,104 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/generate-nonce:
+    post:
+      summary: Generate unique message for signing
+      description: Generates a unique message (containing a nonce) to be signed by the user's wallet.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NonceGenerationRequest'
+      responses:
+        '200':
+          description: Unique message successfully generated and returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: The unique message containing the nonce, address, and timestamp.
+                    example: "Sign in to MyDApp. Nonce: 60a5e...-..., Address: 0x742..., Timestamp: 2025-..."
+        '400':
+          description: Bad request - missing address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server or database error
+
+  /api/verify-signature:
+    post:
+      summary: Verify wallet signature and issue JWT
+      description: Verifies the cryptographic signature against the unique message and issues a JWT if successful. Prevents replay attacks by consuming the nonce.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifySignatureRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jwt_token:
+                    type: string
+                    description: JWT token associated with user
+          description: Signature verified successfully and JWT is received.
+        '401':
+          description: Unauthorized - Signature verification failed (e.g., address mismatch or invalid/expired nonce).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request - invalid signature format or missing fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+
 components:
   schemas:
+    VerifySignatureRequest:
+      type: object
+      required:
+        - address
+        - message
+        - signature
+      properties:
+        address:
+          type: string
+          description: The address of user (or its wallet)
+        message:
+          type: string
+          description: The message that was signed (must contain the unique nonce)
+        signature: # ⬅️ Changed from 'Signature' to 'signature'
+          type: string
+          description: The cryptographic signature of the message
+    NonceGenerationRequest:
+      type: object
+      required:
+        - address
+      properties:
+        address:
+          type: string
+          description: The address of user (or its wallet)
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
     DonationRequest:
       type: object
       required:

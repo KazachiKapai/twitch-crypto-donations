@@ -3,6 +3,7 @@ package environment
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/google/wire"
 )
@@ -24,6 +25,9 @@ type (
 	SwaggerPath string
 
 	OBSServiceDomain string
+
+	JwtSecret            string
+	TokenExpirationHours int
 )
 
 func getEnv(key string) (string, error) {
@@ -94,6 +98,21 @@ func GetOBSServiceDomain() (OBSServiceDomain, error) {
 	return OBSServiceDomain(val), err
 }
 
+func GetJwtSecret() (JwtSecret, error) {
+	val, err := getEnv("JWT_SECRET")
+	return JwtSecret(val), err
+}
+
+func GetTokenExpirationHours() (TokenExpirationHours, error) {
+	val, err := getEnv("JWT_TOKEN_EXPIRATION_HOURS")
+	if err != nil {
+		return 0, err
+	}
+
+	rv, err := strconv.Atoi(val)
+	return TokenExpirationHours(rv), err
+}
+
 var WireSet = wire.NewSet(
 	GetHTTPListenPort,
 	GetRoutePrefix,
@@ -107,4 +126,6 @@ var WireSet = wire.NewSet(
 	GetMigrationsDir,
 	GetSwaggerPath,
 	GetOBSServiceDomain,
+	GetJwtSecret,
+	GetTokenExpirationHours,
 )
