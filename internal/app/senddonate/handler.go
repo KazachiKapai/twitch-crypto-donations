@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 type Database interface {
 	QueryRow(query string, args ...any) *sql.Row
 	Exec(query string, args ...any) (sql.Result, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 type HttpClient interface {
@@ -82,6 +84,10 @@ func (h *Handler) Handle(ctx context.Context, request Request) (*Response, error
 
 	if err := h.sendDonate(ctx, channel, webhookSecret, request); err != nil {
 		return nil, fmt.Errorf("failed to send donate: %w", err)
+	}
+
+	if err := h.saveDonateHistory(ctx, request); err != nil {
+		log.Printf("failed to save donation history: %+v", err)
 	}
 
 	return &Response{StatusCode: http.StatusNoContent}, nil
@@ -157,4 +163,34 @@ func (h *Handler) generateSignature(webhookSecret string, requestBody []byte) (s
 	signature := fmt.Sprintf("sha256=%s", signatureHex)
 
 	return timestamp, nonce, signature
+}
+
+func (h *Handler) saveDonateHistory(ctx context.Context, request Request) error {
+	const query = `
+       INSERT INTO donations_history (
+          sender_address, sender_username,
+          donation_amount, currency,
+          text, audio_url,
+          image_url, duration_ms,
+          layout, created_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+    `
+
+	now := time.Now().UTC()
+	body := request.Body
+
+	_, err := h.db.ExecContext(
+		ctx, query, body.Wallet,
+		body.Username, body.Amount,
+		body.Currency, body.Text,
+		body.AudioUrl, body.ImageUrl,
+		body.DurationMs, body.Layout, now,
+	)
+
+	if err != nil {
+		return fmt.Errorf("error executing donation insert: %w", err)
+	}
+
+	return nil
 }

@@ -241,8 +241,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/secure/donations-history:
+    get:
+      summary: Get donation history for authenticated user
+      description: Returns all donations made by the authenticated user, ordered by most recent first
+      tags:
+        - Donations
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Successfully retrieved donation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationsHistoryResponse'
+              example:
+                donations:
+                  - donation_amount: "2.5"
+                    sender_address: "0xe92a7b67d5d1A5b2f410B7F44Be14333c5E7732c"
+                    sender_username: "CryptoWhale"
+                    currency: "SOL"
+                    text: "GM! To the moon 🚀"
+                    audio_url: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+                    image_url: "https://images.example.com/avatar.png"
+                    duration_ms: 7000
+                    layout: "default"
+                    channel: "streamer_channel_123"
+                    created_at: "2025-10-27T10:30:00Z"
+                amount: 0
+        '401':
+          description: Unauthorized - missing or invalid JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Unauthorized or no jwt middleware is found"
+                code: "UNAUTHORIZED"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/verify-signature endpoint
   schemas:
+    DonationsHistoryResponse:
+      type: object
+      required:
+        - donations
+        - amount
+      properties:
+        donations:
+          type: array
+          description: List of donations made by the user
+          items:
+            $ref: '#/components/schemas/DonationHistoryItem'
+        amount:
+          type: integer
+          format: int64
+          description: Total amount (currently always 0, can be calculated if needed)
+          example: 0
     VerifySignatureRequest:
       type: object
       required:
@@ -371,6 +438,67 @@ components:
           format: int64
           description: The slot number the transaction was confirmed in.
           example: 210000000
+
+    DonationHistoryItem:
+      type: object
+      required:
+        - donation_amount
+        - sender_address
+        - sender_username
+        - currency
+        - text
+        - audio_url
+        - duration_ms
+        - layout
+        - channel
+        - created_at
+      properties:
+        donation_amount:
+          type: string
+          description: The donation amount as a string
+          example: "2.5"
+        sender_address:
+          type: string
+          description: The sender's wallet address
+          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+        sender_username:
+          type: string
+          description: The sender's username
+          example: "CryptoWhale"
+        currency:
+          type: string
+          description: The cryptocurrency used
+          example: "SOL"
+        text:
+          type: string
+          description: The donation message
+          example: "GM! To the moon 🚀"
+        audio_url:
+          type: string
+          description: URL to the audio file
+          example: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+        image_url:
+          type: string
+          description: Optional URL to an image
+          example: "https://images.example.com/avatar.png"
+        duration_ms:
+          type: number
+          format: double
+          description: Duration in milliseconds
+          example: 7000
+        layout:
+          type: string
+          description: The layout style used
+          example: "default"
+        channel:
+          type: string
+          description: The channel where the donation was sent
+          example: "streamer_channel_123"
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp of when the donation was created
+          example: "2025-10-27T10:30:00Z"
 
     Error:
       type: object

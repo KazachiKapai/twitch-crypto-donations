@@ -1,6 +1,8 @@
 package router
 
 import (
+	"fmt"
+	"twitch-crypto-donations/internal/app/donationshistory"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
@@ -21,6 +23,7 @@ type Handlers struct {
 	NonceGenerator        *noncegeneration.Handler
 	PaymentConfirmation   *paymentconfirmation.Handler
 	SignatureVerification *signatureverification.Handler
+	DonationsHistory      *donationshistory.Handler
 }
 
 func New(
@@ -28,6 +31,7 @@ func New(
 	handlers Handlers,
 	routePrefix environment.RoutePrefix,
 	swaggerPath environment.SwaggerPath,
+	jwtMiddleware gin.HandlerFunc,
 	middlewares ...gin.HandlerFunc,
 ) *gin.Engine {
 	engine.StaticFile("/swagger.yml", string(swaggerPath))
@@ -37,9 +41,15 @@ func New(
 		ginSwagger.DefaultModelsExpandDepth(-1),
 	))
 
-	engine.Use(middlewares...)
+	secure := engine.Group(fmt.Sprintf("%s/secure", routePrefix))
+	secure.Use(middlewares...)
+	secure.Use(jwtMiddleware)
+	{
+		secure.GET("/donations-history", middleware.New(handlers.DonationsHistory).Handle)
+	}
 
 	api := engine.Group(string(routePrefix))
+	api.Use(middlewares...)
 	{
 		api.POST("/generate-nonce", middleware.New(handlers.NonceGenerator).Handle)
 		api.POST("/verify-signature", middleware.New(handlers.SignatureVerification).Handle)

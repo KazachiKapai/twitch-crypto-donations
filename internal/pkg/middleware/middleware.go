@@ -3,6 +3,8 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +14,7 @@ type Request[T any] struct {
 	Body       T
 	PathParams map[string]string
 	Headers    http.Header
+	Context    map[any]any
 }
 
 type Response[T any] struct {
@@ -37,8 +40,13 @@ func (m *Middleware[RequestBody, ResponseBody]) Handle(ctx *gin.Context) {
 	var requestBody RequestBody
 	if ctx.Request.Body != nil && ctx.Request.Body != http.NoBody {
 		if err := json.NewDecoder(ctx.Request.Body).Decode(&requestBody); err != nil {
-			ctx.AbortWithStatus(http.StatusBadRequest)
-			return
+			if errors.Is(err, io.EOF) {
+				ctx.AbortWithStatus(http.StatusOK)
+				return
+			} else {
+				ctx.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
 		}
 	}
 
@@ -47,10 +55,16 @@ func (m *Middleware[RequestBody, ResponseBody]) Handle(ctx *gin.Context) {
 		pathParams[param.Key] = param.Value
 	}
 
+	contextValues := make(map[any]any)
+	for key, value := range ctx.Keys {
+		contextValues[key] = value
+	}
+
 	requestData := Request[RequestBody]{
 		Body:       requestBody,
 		PathParams: pathParams,
 		Headers:    ctx.Request.Header,
+		Context:    contextValues,
 	}
 
 	responseCode := http.StatusInternalServerError

@@ -8,10 +8,11 @@ package main
 
 import (
 	"context"
+	"twitch-crypto-donations/internal/app/donationshistory"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
-	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/senddonate"
+	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/config"
 	"twitch-crypto-donations/internal/pkg/environment"
@@ -77,12 +78,14 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	}
 	manager := jwt.New(tokenExpirationHours, jwtSecret)
 	signatureverificationHandler := signatureverification.New(db, manager)
+	donationshistoryHandler := donationshistory.New(db)
 	handlers := router.Handlers{
 		Register:              handler,
 		SendDonate:            senddonateHandler,
 		NonceGenerator:        noncegenerationHandler,
 		PaymentConfirmation:   paymentconfirmationHandler,
 		SignatureVerification: signatureverificationHandler,
+		DonationsHistory:      donationshistoryHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
 	if err != nil {
@@ -92,12 +95,13 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	handlerFunc := config.NewJwtMiddleware(jwtSecret)
 	appEnv, err := environment.GetAppEnv()
 	if err != nil {
 		return nil, err
 	}
 	v := config.NewMiddlewares(appEnv, swaggerPath)
-	engine := config.NewEngine(handlers, routePrefix, swaggerPath, v)
+	engine := config.NewEngine(handlers, routePrefix, swaggerPath, handlerFunc, v)
 	httpListenPort, err := environment.GetHTTPListenPort()
 	if err != nil {
 		return nil, err

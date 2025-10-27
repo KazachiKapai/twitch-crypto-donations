@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"twitch-crypto-donations/internal/app/donationshistory"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
@@ -105,17 +106,24 @@ func NewConnectionString(
 	return ConnectionString(connStr)
 }
 
-func NewEngine(handlers router.Handlers, prefixRouter environment.RoutePrefix, swaggerPath environment.SwaggerPath, middlewares []gin.HandlerFunc) *gin.Engine {
-	return router.New(gin.New(), handlers, prefixRouter, swaggerPath, middlewares...)
+func NewEngine(handlers router.Handlers, prefixRouter environment.RoutePrefix, swaggerPath environment.SwaggerPath, jwtMiddleware gin.HandlerFunc, middlewares []gin.HandlerFunc) *gin.Engine {
+	return router.New(gin.New(), handlers, prefixRouter, swaggerPath, jwtMiddleware, middlewares...)
+}
+
+func NewJwtMiddleware(jwtSecret environment.JwtSecret) gin.HandlerFunc {
+	jwtMiddleware := middleware.NewJwtMiddleware(jwtSecret)
+	return jwtMiddleware.Request()
 }
 
 func NewMiddlewares(appEnv environment.AppEnv, path environment.SwaggerPath) []gin.HandlerFunc {
+	corsMiddleware := middleware.NewCorsMiddleware()
+
 	validationMiddleware, err := middleware.NewValidationMiddleware(path)
 	if err != nil {
 		log.Fatalf("failed to initialize validation middleware: %v", err)
 	}
 
-	middlewares := []gin.HandlerFunc{validationMiddleware.Response(), validationMiddleware.Request()}
+	middlewares := []gin.HandlerFunc{validationMiddleware.Response(), validationMiddleware.Request(), corsMiddleware.Request()}
 	if appEnv == "development" {
 		middlewares = append(middlewares, gin.Logger())
 	}
@@ -130,12 +138,14 @@ func NewServer(engine *gin.Engine, listenPort environment.HTTPListenPort) *serve
 var WireSet = wire.NewSet(
 	environment.WireSet,
 	jwt.New,
-	signatureverification.New,
-	noncegeneration.New,
-	setobswebhooks.New,
 	senddonate.New,
+	setobswebhooks.New,
+	noncegeneration.New,
+	donationshistory.New,
 	paymentconfirmation.New,
+	signatureverification.New,
 
+	wire.Bind(new(donationshistory.Database), new(*sql.DB)),
 	wire.Bind(new(paymentconfirmation.RpcClient), new(*rpc.Client)),
 	wire.Bind(new(noncegeneration.Database), new(*sql.DB)),
 	wire.Bind(new(signatureverification.JwtManager), new(*jwt.Manager)),
@@ -147,6 +157,7 @@ var WireSet = wire.NewSet(
 
 	wire.Struct(new(router.Handlers), "*"),
 
+	NewJwtMiddleware,
 	NewRpcClient,
 	NewConnectionString,
 	NewDatabase,

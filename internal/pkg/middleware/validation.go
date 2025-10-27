@@ -56,10 +56,13 @@ func (m *ValidationMiddleware) Request() gin.HandlerFunc {
 			Request:    c.Request,
 			PathParams: pathParams,
 			Route:      route,
+			Options: &openapi3filter.Options{
+				AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+			},
 		}
 
 		var bodyBytes []byte
-		if c.Request.Body != nil {
+		if c.Request.Body != nil && c.Request.Body != http.NoBody {
 			bodyBytes, err = io.ReadAll(c.Request.Body)
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
@@ -68,8 +71,13 @@ func (m *ValidationMiddleware) Request() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
+			c.Request.Body.Close()
 
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			if len(bodyBytes) > 0 {
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			} else {
+				c.Request.Body = http.NoBody
+			}
 		}
 
 		ctx := context.Background()
