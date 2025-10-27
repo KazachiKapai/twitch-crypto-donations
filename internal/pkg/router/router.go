@@ -8,6 +8,7 @@ import (
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/signatureverification"
+	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
 
@@ -18,12 +19,13 @@ import (
 )
 
 type Handlers struct {
-	SetObsWebhooks        *setobswebhooks.Handler
-	SendDonate            *senddonate.Handler
-	NonceGenerator        *noncegeneration.Handler
-	PaymentConfirmation   *paymentconfirmation.Handler
-	SignatureVerification *signatureverification.Handler
-	DonationsHistory      *donationshistory.Handler
+	SetObsWebhooks           *setobswebhooks.Handler
+	SendDonate               *senddonate.Handler
+	NonceGenerator           *noncegeneration.Handler
+	PaymentConfirmation      *paymentconfirmation.Handler
+	SignatureVerification    *signatureverification.Handler
+	DonationsHistory         *donationshistory.Handler
+	UpdateDefaultObsSettings *updatedefaultobssettings.Handler
 }
 
 func New(
@@ -46,6 +48,7 @@ func New(
 	secure.Use(jwtMiddleware)
 	{
 		secure.GET("/donations-history", middleware.New(handlers.DonationsHistory).Handle)
+		secure.PUT("/update-default-obs-settings", middleware.New(handlers.UpdateDefaultObsSettings).Handle)
 	}
 
 	api := engine.Group(string(routePrefix))

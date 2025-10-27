@@ -14,9 +14,12 @@ import (
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/signatureverification"
+	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/config"
 	"twitch-crypto-donations/internal/pkg/environment"
+	"twitch-crypto-donations/internal/pkg/http"
 	"twitch-crypto-donations/internal/pkg/jwt"
+	"twitch-crypto-donations/internal/pkg/obsservice"
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
 )
@@ -55,12 +58,14 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	}
 	db := config.NewDatabase(connectionString, migrationsDir)
 	client := config.NewHttpClient()
+	httpClient := http.New(client)
 	obsServiceDomain, err := environment.GetOBSServiceDomain()
 	if err != nil {
 		return nil, err
 	}
-	handler := setobswebhooks.New(db, client, obsServiceDomain)
-	senddonateHandler := senddonate.New(db, client, obsServiceDomain)
+	obsService := obsservice.New(db, httpClient, obsServiceDomain)
+	handler := setobswebhooks.New(db, obsService, obsServiceDomain)
+	senddonateHandler := senddonate.New(obsService)
 	noncegenerationHandler := noncegeneration.New(db)
 	rpcEndpoint, err := environment.GetRpcEndpoint()
 	if err != nil {
@@ -79,13 +84,15 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	manager := jwt.New(tokenExpirationHours, jwtSecret)
 	signatureverificationHandler := signatureverification.New(db, manager)
 	donationshistoryHandler := donationshistory.New(db)
+	updatedefaultobssettingsHandler := updatedefaultobssettings.New(obsService)
 	handlers := router.Handlers{
-		SetObsWebhooks:        handler,
-		SendDonate:            senddonateHandler,
-		NonceGenerator:        noncegenerationHandler,
-		PaymentConfirmation:   paymentconfirmationHandler,
-		SignatureVerification: signatureverificationHandler,
-		DonationsHistory:      donationshistoryHandler,
+		SetObsWebhooks:           handler,
+		SendDonate:               senddonateHandler,
+		NonceGenerator:           noncegenerationHandler,
+		PaymentConfirmation:      paymentconfirmationHandler,
+		SignatureVerification:    signatureverificationHandler,
+		DonationsHistory:         donationshistoryHandler,
+		UpdateDefaultObsSettings: updatedefaultobssettingsHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
 	if err != nil {

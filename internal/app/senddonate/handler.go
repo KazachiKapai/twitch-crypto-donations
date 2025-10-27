@@ -1,196 +1,114 @@
 package senddonate
 
 import (
-	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"database/sql"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
 	"net/http"
-	"strconv"
-	"strings"
-	"time"
-	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/middleware"
-
-	"github.com/google/uuid"
+	"twitch-crypto-donations/internal/pkg/obsservice"
 )
 
-type Database interface {
-	QueryRow(query string, args ...any) *sql.Row
-	Exec(query string, args ...any) (sql.Result, error)
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
-
-type HttpClient interface {
-	Do(req *http.Request) (*http.Response, error)
+type ObsService interface {
+	WebhookAlert(wallet string, request obsservice.AlertEvent) (any, error)
+	WebhookMedia(wallet string, request obsservice.MediaEvent) (any, error)
 }
 
 type RequestBody struct {
-	Wallet     string  `json:"wallet"`
-	Amount     float64 `json:"amount"`
-	AudioUrl   string  `json:"audio_url"`
-	Currency   string  `json:"currency"`
-	DurationMs float64 `json:"duration_ms"`
-	ImageUrl   string  `json:"image_url"`
-	Layout     string  `json:"layout"`
-	Text       string  `json:"text"`
-	Username   string  `json:"username"`
+	Wallet     string   `json:"wallet"`
+	Username   *string  `json:"username"`
+	Amount     *float64 `json:"amount"`
+	Currency   *string  `json:"currency"`
+	Message    *string  `json:"message"`
+	DurationMs *int64   `json:"duration_ms"`
+
+	AlertEvent *AlertRequest `json:"alert_event"`
+	MediaEvent *MediaRequest `json:"media_event"`
 }
 
-type ResponseBody struct{}
+type AlertRequest struct {
+	Enable            bool    `json:"enable"`
+	NotificationSound *string `json:"notification_sound"`
+	VoiceUrl          *string `json:"voice_url"`
+	ImageUrl          *string `json:"image_url"`
+	GifUrl            *string `json:"gif_url"`
+}
+
+type MediaRequest struct {
+	Enable     bool   `json:"enable"`
+	YoutubeUrl string `json:"youtube_url"`
+	StartTime  *int64 `json:"start_time"`
+	EndTime    *int64 `json:"end_time"`
+	AutoPlay   *bool  `json:"auto_play"`
+	Controls   *bool  `json:"controls"`
+	Mute       *bool  `json:"mute"`
+}
+
+type ResponseBody struct {
+	Errors []Error `json:"errors"`
+}
+
+type Error struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
 
 type (
 	Request  = middleware.Request[RequestBody]
 	Response = middleware.Response[ResponseBody]
 )
 
-type ObsEventsDonateRequest struct {
-	Amount     float64 `json:"amount"`
-	AudioUrl   string  `json:"audio_url"`
-	Channel    string  `json:"channel"`
-	Currency   string  `json:"currency"`
-	DurationMs float64 `json:"duration_ms"`
-	ImageUrl   string  `json:"image_url"`
-	Layout     string  `json:"layout"`
-	Text       string  `json:"text"`
-	Username   string  `json:"username"`
-}
-
-type ObsEventsDonateResponse string
-
 type Handler struct {
-	db         Database
-	httpClient HttpClient
-	obsDomain  environment.OBSServiceDomain
+	obsService ObsService
 }
 
-func New(db Database, httpClient HttpClient, obsDomain environment.OBSServiceDomain) *Handler {
-	return &Handler{db: db, httpClient: httpClient, obsDomain: obsDomain}
+func New(obsService ObsService) *Handler {
+	return &Handler{obsService: obsService}
 }
 
-func (h *Handler) Handle(ctx context.Context, request Request) (*Response, error) {
-	channel, webhookSecret, exists := h.getChannelInfo(request.Body.Wallet)
-	if !exists {
-		return &Response{
-			StatusCode: http.StatusNotFound,
-		}, nil
+func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) {
+	response := ResponseBody{Errors: make([]Error, 0, 2)}
+
+	if request.Body.MediaEvent != nil && request.Body.MediaEvent.Enable {
+		_, err := h.obsService.WebhookMedia(request.Body.Wallet, obsservice.MediaEvent{
+			Username:   request.Body.Username,
+			Amount:     request.Body.Amount,
+			Currency:   request.Body.Currency,
+			Message:    request.Body.Message,
+			DurationMs: request.Body.DurationMs,
+			YoutubeUrl: request.Body.MediaEvent.YoutubeUrl,
+			StartTime:  request.Body.MediaEvent.StartTime,
+			EndTime:    request.Body.MediaEvent.EndTime,
+			AutoPlay:   request.Body.MediaEvent.AutoPlay,
+			Controls:   request.Body.MediaEvent.Controls,
+			Mute:       request.Body.MediaEvent.Mute,
+		})
+
+		if err != nil {
+			response.Errors = append(response.Errors, Error{Message: err.Error()})
+		}
 	}
 
-	if err := h.sendDonate(ctx, channel, webhookSecret, request); err != nil {
-		return nil, fmt.Errorf("failed to send donate: %w", err)
+	if request.Body.AlertEvent != nil && request.Body.AlertEvent.Enable {
+		_, err := h.obsService.WebhookAlert(request.Body.Wallet, obsservice.AlertEvent{
+			Username:          request.Body.Username,
+			Amount:            request.Body.Amount,
+			Currency:          request.Body.Currency,
+			Message:           request.Body.Message,
+			DurationMs:        request.Body.DurationMs,
+			NotificationSound: request.Body.AlertEvent.NotificationSound,
+			VoiceUrl:          request.Body.AlertEvent.VoiceUrl,
+			ImageUrl:          request.Body.AlertEvent.ImageUrl,
+			GifUrl:            request.Body.AlertEvent.GifUrl,
+		})
+
+		if err != nil {
+			response.Errors = append(response.Errors, Error{Message: err.Error()})
+		}
 	}
 
-	if err := h.saveDonateHistory(ctx, request); err != nil {
-		log.Printf("failed to save donation history: %+v", err)
+	statusCode := http.StatusOK
+	if len(response.Errors) > 0 {
+		statusCode = http.StatusInternalServerError
 	}
 
-	return &Response{StatusCode: http.StatusNoContent}, nil
-}
-
-func (h *Handler) getChannelInfo(wallet string) (string, string, bool) {
-	const query = `SELECT channel, webhook_secret FROM users WHERE wallet = $1;`
-
-	var channel, webhookSecret string
-	err := h.db.QueryRow(query, wallet).Scan(&channel, &webhookSecret)
-	if err != nil {
-		return "", "", false
-	}
-
-	return channel, webhookSecret, true
-}
-
-func (h *Handler) sendDonate(ctx context.Context, channel, webhookSecret string, request Request) error {
-	url := fmt.Sprintf("%s/events/donate", h.obsDomain)
-
-	requestBody := ObsEventsDonateRequest{
-		Channel:    channel,
-		Username:   request.Body.Username,
-		Amount:     request.Body.Amount,
-		Currency:   request.Body.Currency,
-		Text:       request.Body.Text,
-		AudioUrl:   request.Body.AudioUrl,
-		ImageUrl:   request.Body.ImageUrl,
-		DurationMs: request.Body.DurationMs,
-		Layout:     request.Body.Layout,
-	}
-
-	requestBodyJson, err := json.Marshal(requestBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	timestamp, nonce, signature := h.generateSignature(webhookSecret, requestBodyJson)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(requestBodyJson))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-signature", signature)
-	req.Header.Set("x-nonce", nonce)
-	req.Header.Set("x-timestamp", timestamp)
-
-	resp, err := h.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("OBS service error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-func (h *Handler) generateSignature(webhookSecret string, requestBody []byte) (string, string, string) {
-	timestamp := strconv.FormatInt(time.Now().UTC().Unix(), 10)
-
-	nonce := strings.ReplaceAll(uuid.New().String(), "-", "")
-
-	mac := hmac.New(sha256.New, []byte(webhookSecret))
-	mac.Write(requestBody)
-	signatureHex := hex.EncodeToString(mac.Sum(nil))
-
-	signature := fmt.Sprintf("sha256=%s", signatureHex)
-
-	return timestamp, nonce, signature
-}
-
-func (h *Handler) saveDonateHistory(ctx context.Context, request Request) error {
-	const query = `
-       INSERT INTO donations_history (
-          sender_address, sender_username,
-          donation_amount, currency,
-          text, audio_url,
-          image_url, duration_ms,
-          layout, created_at
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-    `
-
-	now := time.Now().UTC()
-	body := request.Body
-
-	_, err := h.db.ExecContext(
-		ctx, query, body.Wallet,
-		body.Username, body.Amount,
-		body.Currency, body.Text,
-		body.AudioUrl, body.ImageUrl,
-		body.DurationMs, body.Layout, now,
-	)
-
-	if err != nil {
-		return fmt.Errorf("error executing donation insert: %w", err)
-	}
-
-	return nil
+	return &Response{Body: response, StatusCode: statusCode}, nil
 }

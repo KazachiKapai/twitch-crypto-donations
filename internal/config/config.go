@@ -13,9 +13,12 @@ import (
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
 	"twitch-crypto-donations/internal/app/signatureverification"
+	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/pkg/environment"
+	httppkg "twitch-crypto-donations/internal/pkg/http"
 	"twitch-crypto-donations/internal/pkg/jwt"
 	"twitch-crypto-donations/internal/pkg/middleware"
+	"twitch-crypto-donations/internal/pkg/obsservice"
 	"twitch-crypto-donations/internal/pkg/router"
 	"twitch-crypto-donations/internal/pkg/server"
 
@@ -138,22 +141,28 @@ func NewServer(engine *gin.Engine, listenPort environment.HTTPListenPort) *serve
 var WireSet = wire.NewSet(
 	environment.WireSet,
 	jwt.New,
+	httppkg.New,
+	obsservice.New,
 	senddonate.New,
 	setobswebhooks.New,
 	noncegeneration.New,
 	donationshistory.New,
 	paymentconfirmation.New,
 	signatureverification.New,
+	updatedefaultobssettings.New,
 
+	wire.Bind(new(updatedefaultobssettings.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(donationshistory.Database), new(*sql.DB)),
 	wire.Bind(new(paymentconfirmation.RpcClient), new(*rpc.Client)),
 	wire.Bind(new(noncegeneration.Database), new(*sql.DB)),
 	wire.Bind(new(signatureverification.JwtManager), new(*jwt.Manager)),
 	wire.Bind(new(signatureverification.Database), new(*sql.DB)),
-	wire.Bind(new(setobswebhooks.HttpClient), new(*http.Client)),
+	wire.Bind(new(setobswebhooks.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(setobswebhooks.Database), new(*sql.DB)),
-	wire.Bind(new(senddonate.HttpClient), new(*http.Client)),
-	wire.Bind(new(senddonate.Database), new(*sql.DB)),
+	wire.Bind(new(senddonate.ObsService), new(*obsservice.ObsService)),
+	wire.Bind(new(obsservice.Database), new(*sql.DB)),
+	wire.Bind(new(obsservice.HttpClient), new(*httppkg.Client)),
+	wire.Bind(new(httppkg.HttpClient), new(*http.Client)),
 
 	wire.Struct(new(router.Handlers), "*"),
 

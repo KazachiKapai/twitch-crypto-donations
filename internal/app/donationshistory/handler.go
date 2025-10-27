@@ -51,7 +51,10 @@ func New(db Database) *Handler {
 func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) {
 	address, exists := request.Context[middleware.AddressKey].(string)
 	if !exists || address == "" {
-		return nil, fmt.Errorf("unauthorized or no jwt middleware is found")
+		return &Response{
+			StatusCode: http.StatusUnauthorized,
+			Body:       ResponseBody{Donations: []Donation{}, TotalAmount: 0},
+		}, fmt.Errorf("jwt is not found or api middleware is failed")
 	}
 
 	donationsHistory, totalAmount, err := h.getDonationsHistory(address)

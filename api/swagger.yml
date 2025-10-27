@@ -13,7 +13,9 @@ paths:
   /api/set-obs-webhooks:
     post:
       summary: Register streamer in OBS service
-      description: Registers stream in OBS service and returns existing donation URL if wallet is already registered
+      description: |
+        Registers a streamer's wallet in the OBS service and returns widget URLs for alerts and media.
+        If the wallet is already registered, returns existing widget URLs with a 409 status.
       tags:
         - OBS Service
       requestBody:
@@ -21,37 +23,28 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - wallet
-              properties:
-                wallet:
-                  type: string
-                  description: The crypto wallet address to setobswebhooks
-                  example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+              $ref: '#/components/schemas/SetObsWebhooksRequest'
+            example:
+              wallet: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
       responses:
         '201':
-          description: Wallet successfully registered and donation URL created
+          description: Wallet successfully registered and widget URLs created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  donation_url:
-                    type: string
-                    description: The generated donation URL for the wallet
-                    example: "https://donate.example.com/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                $ref: '#/components/schemas/SetObsWebhooksResponse'
+              example:
+                alert_widget_url: "https://obs.example.com/alerts/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+                media_widget_url: "https://obs.example.com/media/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
         '409':
-          description: Wallet already registered, returning existing donation URL
+          description: Wallet already registered, returning existing widget URLs
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  donation_url:
-                    type: string
-                    description: The existing donation URL for the wallet
-                    example: "https://donate.example.com/0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                $ref: '#/components/schemas/SetObsWebhooksResponse'
+              example:
+                alert_widget_url: "https://obs.example.com/alerts/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+                media_widget_url: "https://obs.example.com/media/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
         '400':
           description: Bad request - invalid wallet format or missing required fields
           content:
@@ -67,8 +60,13 @@ paths:
 
   /api/send-donate:
     post:
-      summary: Send a donation alert
-      description: Sends a donation alert to the streamer's OBS overlay. The donation must include an audio URL and will be displayed with the provided text, username, and amount.
+      summary: Send a donation alert or media event
+      description: |
+        Sends donation notifications to a streamer's OBS overlay. Supports two types of events:
+        - Alert Event: Traditional donation alerts with audio, images, and notification sounds
+        - Media Event: YouTube video playback with donation context
+
+        Both events can be sent simultaneously by enabling both in the request.
       tags:
         - Donations
       requestBody:
@@ -78,44 +76,42 @@ paths:
             schema:
               $ref: '#/components/schemas/DonationRequest'
             examples:
-              basic:
-                summary: Basic donation with audio
+              alert_event:
+                summary: Alert event with voice TTS
                 value:
-                  wallet: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                  wallet: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
                   username: "CryptoWhale"
                   amount: 2.5
                   currency: "SOL"
-                  text: "GM! To the moon 🚀"
-                  audio_url: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+                  message: "GM! To the moon 🚀"
                   duration_ms: 7000
-                  layout: "default"
+                  alert_event:
+                    enable: true
+                    voice_url: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+                    notification_sound: "chime"
+                    image_url: "https://images.example.com/avatar.png"
       responses:
-        '204':
-          description: Donation successfully sent to streamer's OBS overlay
-        '404':
-          description: Wallet not found - the wallet address is not registered
+        '200':
+          description: Request processed successfully (check errors array for partial failures)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: "Wallet not found"
-                code: "WALLET_NOT_FOUND"
-        '400':
-          description: Bad request - invalid request body or missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: "Request validation failed"
-                details: "audio_url is required"
+                $ref: '#/components/schemas/DonationResponse'
+              examples:
+                success:
+                  summary: All events sent successfully
+                  value:
+                    errors: [ ]
         '500':
-          description: Internal server error
+          description: Internal server error - one or more events failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/DonationResponse'
+              example:
+                errors:
+                  - message: "Wallet not found"
+                  - message: "Failed to process alert event"
 
   /api/generate-nonce:
     post:
@@ -247,6 +243,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/update-default-obs-settings:
+    put:
+      summary: Update default OBS alert settings
+      description: |
+        Updates the default settings for OBS alert widgets. These settings will be applied 
+        to all future alerts unless overridden by individual donation events.
+        Requires JWT authentication.
+      tags:
+        - OBS Service
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDefaultObsSettingsRequest'
+            example:
+              default_notification_sound: "chime"
+              default_alert_image: "https://images.example.com/default-alert.png"
+              default_alert_duration: 5000
+      responses:
+        '204':
+          description: Settings successfully updated
+        '400':
+          description: Bad request - invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - missing or invalid JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/secure/donations-history:
     get:
       summary: Get donation history for authenticated user
@@ -300,6 +339,53 @@ components:
       bearerFormat: JWT
       description: JWT token obtained from /api/verify-signature endpoint
   schemas:
+    UpdateDefaultObsSettingsRequest:
+      type: object
+      properties:
+        default_notification_sound:
+          type: string
+          description: Name or identifier of the default notification sound
+          example: "chime"
+        default_alert_image:
+          type: string
+          format: uri
+          description: URL to the default image to display with alerts
+          example: "https://images.example.com/default-alert.png"
+        default_alert_duration:
+          type: integer
+          format: int64
+          description: Default duration in milliseconds for alert display
+          minimum: 1000
+          maximum: 60000
+          example: 5000
+
+    SetObsWebhooksRequest:
+      type: object
+      required:
+        - wallet
+      properties:
+        wallet:
+          type: string
+          description: The Solana wallet address to register
+          example: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+
+    SetObsWebhooksResponse:
+      type: object
+      required:
+        - alert_widget_url
+        - media_widget_url
+      properties:
+        alert_widget_url:
+          type: string
+          format: uri
+          description: The OBS widget URL for displaying donation alerts
+          example: "https://obs.example.com/alerts/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+        media_widget_url:
+          type: string
+          format: uri
+          description: The OBS widget URL for displaying media (YouTube videos)
+          example: "https://obs.example.com/media/9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+
     DonationsHistoryResponse:
       type: object
       required:
@@ -350,18 +436,11 @@ components:
       type: object
       required:
         - wallet
-        - username
-        - amount
-        - currency
-        - text
-        - audio_url
-        - duration_ms
-        - layout
       properties:
         wallet:
           type: string
-          description: The recipient's wallet address (must be registered)
-          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+          description: The recipient's Solana wallet address (must be registered)
+          example: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
         username:
           type: string
           description: The donor's username to display
@@ -378,37 +457,122 @@ components:
         currency:
           type: string
           description: The cryptocurrency used for donation
-          enum: [SOL, ETH, BTC, USDC, USDT]
+          enum: [ SOL, ETH, BTC, USDC, USDT ]
           example: "SOL"
-        text:
+        message:
           type: string
           description: The donation message to display
           minLength: 1
           maxLength: 500
           example: "GM! To the moon 🚀"
-        audio_url:
+        duration_ms:
+          type: integer
+          format: int64
+          description: Duration in milliseconds for how long to show the alert/media
+          minimum: 1000
+          maximum: 60000
+          example: 7000
+        alert_event:
+          $ref: '#/components/schemas/AlertEvent'
+        media_event:
+          $ref: '#/components/schemas/MediaEvent'
+
+    AlertEvent:
+      type: object
+      required:
+        - enable
+      properties:
+        enable:
+          type: boolean
+          description: Whether to trigger the alert event
+          example: true
+        notification_sound:
+          type: string
+          description: Name or identifier of the notification sound to play
+          example: "chime"
+        voice_url:
           type: string
           format: uri
-          description: URL to the audio file (TTS or uploaded) - REQUIRED
+          description: URL to the voice/TTS audio file
           example: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
         image_url:
           type: string
           format: uri
-          description: Optional URL to an image to display with the donation
+          description: URL to an image to display with the alert
           example: "https://images.example.com/avatar.png"
-        duration_ms:
-          type: number
-          format: double
-          description: Duration in milliseconds for how long to show the alert
-          minimum: 1000
-          maximum: 60000
-          example: 7000
-        layout:
+        gif_url:
           type: string
-          description: The layout style for the donation alert
-          enum: [default, minimal, banner, fullscreen]
-          default: default
-          example: "default"
+          format: uri
+          description: URL to an animated GIF to display with the alert
+          example: "https://media.giphy.com/media/example.gif"
+
+    MediaEvent:
+      type: object
+      required:
+        - enable
+        - youtube_url
+      properties:
+        enable:
+          type: boolean
+          description: Whether to trigger the media event
+          example: true
+        youtube_url:
+          type: string
+          format: uri
+          description: YouTube video URL to play
+          example: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        start_time:
+          type: integer
+          format: int64
+          description: Start time in seconds for the video playback
+          minimum: 0
+          example: 10
+        end_time:
+          type: integer
+          format: int64
+          description: End time in seconds for the video playback
+          minimum: 0
+          example: 40
+        auto_play:
+          type: boolean
+          description: Whether to automatically play the video
+          default: false
+          example: true
+        controls:
+          type: boolean
+          description: Whether to show video player controls
+          default: true
+          example: true
+        mute:
+          type: boolean
+          description: Whether to mute the video audio
+          default: false
+          example: false
+
+    DonationResponse:
+      type: object
+      required:
+        - errors
+      properties:
+        errors:
+          type: array
+          description: Array of errors that occurred (empty if all successful)
+          items:
+            $ref: '#/components/schemas/DonationError'
+
+    DonationError:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Error message describing what went wrong
+          example: "Failed to send alert event: invalid audio URL"
+        type:
+          type: string
+          description: Optional error type/category
+          example: "alert_event_error"
 
     PaymentConfirmationRequest:
       type: object
