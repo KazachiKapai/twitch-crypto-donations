@@ -80,7 +80,7 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	signatureverificationHandler := signatureverification.New(db, manager)
 	donationshistoryHandler := donationshistory.New(db)
 	handlers := router.Handlers{
-		Register:              handler,
+		SetObsWebhooks:        handler,
 		SendDonate:            senddonateHandler,
 		NonceGenerator:        noncegenerationHandler,
 		PaymentConfirmation:   paymentconfirmationHandler,

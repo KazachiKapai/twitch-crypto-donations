@@ -18,7 +18,7 @@ import (
 )
 
 type Handlers struct {
-	Register              *setobswebhooks.Handler
+	SetObsWebhooks        *setobswebhooks.Handler
 	SendDonate            *senddonate.Handler
 	NonceGenerator        *noncegeneration.Handler
 	PaymentConfirmation   *paymentconfirmation.Handler
@@ -53,7 +53,7 @@ func New(
 	{
 		api.POST("/generate-nonce", middleware.New(handlers.NonceGenerator).Handle)
 		api.POST("/verify-signature", middleware.New(handlers.SignatureVerification).Handle)
-		api.POST("/set-obs-webhooks", middleware.New(handlers.Register).Handle)
+		api.POST("/set-obs-webhooks", middleware.New(handlers.SetObsWebhooks).Handle)
 		api.POST("/send-donate", middleware.New(handlers.SendDonate).Handle)
 		api.POST("/confirm-payment", middleware.New(handlers.PaymentConfirmation).Handle)
 	}
