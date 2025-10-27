@@ -22,7 +22,13 @@ ALTER TABLE nonces
 ALTER TABLE nonces
     ADD CONSTRAINT nonces_nonce_unique UNIQUE (nonce);
 
--- Add unique constraint on address for ON CONFLICT support
+-- Clean up duplicate addresses - keep only the most recent one for each address
+DELETE FROM nonces a
+    USING nonces b
+WHERE a.ctid < b.ctid
+  AND a.address = b.address;
+
+-- Now add unique constraint on address for ON CONFLICT support
 ALTER TABLE nonces
     ADD CONSTRAINT nonces_address_unique UNIQUE (address);
 

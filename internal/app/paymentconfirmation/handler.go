@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 	"twitch-crypto-donations/internal/pkg/middleware"
 
 	"github.com/AlekSi/pointer"
@@ -23,7 +24,7 @@ type RequestBody struct {
 }
 
 type ResponseBody struct {
-	Confirmed bool   `json:"success"`
+	Confirmed bool   `json:"confirmed"`
 	Message   string `json:"message"`
 	Slot      uint64 `json:"slot,omitempty"`
 }
@@ -49,33 +50,48 @@ func (h *Handler) Handle(ctx context.Context, request Request) (*Response, error
 		return nil, err
 	}
 
-	tx, err := h.rpcClient.GetTransaction(
-		ctx, sig,
-		&rpc.GetTransactionOpts{
-			Encoding:                       solana.EncodingBase64,
-			Commitment:                     rpc.CommitmentConfirmed,
-			MaxSupportedTransactionVersion: pointer.ToUint64(0),
-		},
-	)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 
-	if err != nil {
-		return nil, err
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	var tx *rpc.GetTransactionResult
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			return nil, errors.New("transaction confirmation timeout after 15 seconds")
+		case <-ticker.C:
+			tx, err = h.rpcClient.GetTransaction(
+				timeoutCtx, sig,
+				&rpc.GetTransactionOpts{
+					Encoding:                       solana.EncodingBase64,
+					Commitment:                     rpc.CommitmentConfirmed,
+					MaxSupportedTransactionVersion: pointer.ToUint64(0),
+				},
+			)
+
+			if err != nil {
+				continue
+			}
+
+			if tx == nil {
+				continue
+			}
+
+			if tx.Meta.Err != nil {
+				return nil, fmt.Errorf("transaction failed: %+v", tx.Meta.Err)
+			}
+
+			return &Response{
+				StatusCode: http.StatusOK,
+				Body: ResponseBody{
+					Confirmed: true,
+					Message:   "Transaction successfully confirmed on Solana.",
+					Slot:      tx.Slot,
+				},
+			}, nil
+		}
 	}
-
-	if tx == nil {
-		return nil, errors.New("transaction not found or not yet confirmed by the network")
-	}
-
-	if tx.Meta.Err != nil {
-		return nil, fmt.Errorf("transaction metadata response: %+v", tx.Meta.Err)
-	}
-
-	return &Response{
-		StatusCode: http.StatusOK,
-		Body: ResponseBody{
-			Confirmed: true,
-			Message:   "Transaction successfully confirmed on Solana.",
-			Slot:      tx.Slot,
-		},
-	}, nil
 }
