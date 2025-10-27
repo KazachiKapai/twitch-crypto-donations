@@ -120,7 +120,7 @@ paths:
   /api/generate-nonce:
     post:
       summary: Generate unique message for signing
-      description: Generates a unique message (containing a nonce) to be signed by the user's wallet.
+      description: Generates a unique message (containing a nonce) to be signed by the user's Solana wallet.
       tags:
         - Authentication
       requestBody:
@@ -136,19 +136,25 @@ paths:
             application/json:
               schema:
                 type: object
+                required:
+                  - message
                 properties:
                   message:
                     type: string
-                    description: The unique message containing the nonce, address, and timestamp.
-                    example: "Sign in to MyDApp. Nonce: 60a5e...-..., Address: 0x742..., Timestamp: 2025-..."
+                    description: The unique message containing the nonce to be signed by the wallet.
+                    example: "Sign in to KapachiPay\n\nNonce: kXvN4ZM8R3yK9pL2wQ5tA6bH7cJ8dF9gH0kL1mN2oP3qR4sT5uV6w="
         '400':
-          description: Bad request - missing address.
+          description: Bad request - invalid or missing address.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Internal server or database error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/verify-signature:
     post:
@@ -333,8 +339,13 @@ components:
       properties:
         address:
           type: string
-          description: The address of user (or its wallet)
-          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+          description: The Solana wallet public key (base58 encoded)
+          minLength: 32
+          maxLength: 44
+          pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+          example: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK"
+      example:
+        address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK"
     DonationRequest:
       type: object
       required:

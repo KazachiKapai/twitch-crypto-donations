@@ -2,15 +2,16 @@ package signatureverification
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"twitch-crypto-donations/internal/pkg/middleware"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/mr-tron/base58"
 )
 
 type Database interface {
@@ -56,58 +57,64 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
 
-	recoveredAddress, err := h.getRecoveredAddress(request.Body.Signature, request.Body.Message)
-	if err != nil {
-		return nil, err
-	}
-
-	if strings.ToLower(recoveredAddress) != strings.ToLower(request.Body.Address) {
-		return nil, fmt.Errorf("signature verification failed: address mismatch. Recovered: %s", recoveredAddress)
+	if err = h.verifySolanaSignature(request.Body.Address, request.Body.Signature, request.Body.Message); err != nil {
+		return nil, fmt.Errorf("signature verification failed: %w", err)
 	}
 
 	jwtToken, err := h.jwt.GenerateJwt(request.Body.Address)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
 
-	return &Response{Body: ResponseBody{JwtToken: jwtToken}, StatusCode: http.StatusOK}, nil
+	return &Response{
+		Body:       ResponseBody{JwtToken: jwtToken},
+		StatusCode: http.StatusOK,
+	}, nil
 }
 
-func (h *Handler) getRecoveredAddress(signature, message string) (string, error) {
-	prefixedMessage := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(message), message)
-	msgHash := crypto.Keccak256Hash([]byte(prefixedMessage))
-
-	sig, err := hexutil.Decode(signature)
+func (h *Handler) verifySolanaSignature(publicKeyStr, signatureStr, message string) error {
+	publicKeyBytes, err := base58.Decode(publicKeyStr)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("invalid public key format: %w", err)
 	}
 
-	if len(sig) != 65 {
-		return "", errors.New("invalid signature length")
+	if len(publicKeyBytes) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid public key length: expected %d, got %d", ed25519.PublicKeySize, len(publicKeyBytes))
 	}
 
-	if sig[64] == 27 || sig[64] == 28 {
-		sig[64] -= 27
-	}
-
-	pubKeyRaw, err := crypto.Ecrecover(msgHash.Bytes(), sig)
+	signatureBytes, err := h.decodeSignature(signatureStr)
 	if err != nil {
-		return "", errors.New("signature recovery failed")
+		return fmt.Errorf("invalid signature format: %w", err)
 	}
 
-	pubKey, err := crypto.UnmarshalPubkey(pubKeyRaw)
-	if err != nil {
-		return "", errors.New("invalid public key")
+	if len(signatureBytes) != ed25519.SignatureSize {
+		return fmt.Errorf("invalid signature length: expected %d, got %d", ed25519.SignatureSize, len(signatureBytes))
 	}
 
-	return crypto.PubkeyToAddress(*pubKey).Hex(), nil
+	messageBytes := []byte(message)
+
+	valid := ed25519.Verify(publicKeyBytes, messageBytes, signatureBytes)
+	if !valid {
+		return errors.New("signature verification failed: invalid signature")
+	}
+
+	return nil
+}
+
+func (h *Handler) decodeSignature(signatureStr string) ([]byte, error) {
+	signatureBytes, err := hex.DecodeString(signatureStr)
+	if err == nil && len(signatureBytes) == ed25519.SignatureSize {
+		return signatureBytes, nil
+	}
+
+	return nil, errors.New("signature must be either hex encoded")
 }
 
 func (h *Handler) validateAndConsumeNonce(nonce, claimedAddress string) error {
-	var storedAddress string
+	deleteQuery := `DELETE FROM nonces WHERE nonce = $1 RETURNING address;`
 
-	selectQuery := "SELECT address FROM nonces WHERE nonce = $1;"
-	err := h.db.QueryRow(selectQuery, nonce).Scan(&storedAddress)
+	var storedAddress string
+	err := h.db.QueryRow(deleteQuery, nonce).Scan(&storedAddress)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.New("nonce is invalid or has expired")
@@ -117,36 +124,36 @@ func (h *Handler) validateAndConsumeNonce(nonce, claimedAddress string) error {
 		return fmt.Errorf("database query error: %w", err)
 	}
 
-	if strings.ToLower(storedAddress) != strings.ToLower(claimedAddress) {
-		return errors.New("nonce requested by different address")
-	}
-
-	deleteQuery := "DELETE FROM nonces WHERE nonce = $1;"
-	result, err := h.db.Exec(deleteQuery, nonce)
-	if err != nil {
-		return fmt.Errorf("failed to consume nonce: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return errors.New("failed to consume nonce: no rows affected")
+	if !strings.EqualFold(storedAddress, claimedAddress) {
+		return errors.New("nonce was requested by a different address")
 	}
 
 	return nil
 }
 
 func (h *Handler) extractNonce(message string) (string, error) {
-	start := strings.Index(message, "Nonce: ")
+	const prefix = "Nonce: "
+
+	start := strings.Index(message, prefix)
 	if start == -1 {
 		return "", errors.New("nonce not found in message")
 	}
 
-	start += len("Nonce: ")
+	start += len(prefix)
 
-	end := strings.Index(message[start:], ",")
-	if end == -1 {
-		return "", errors.New("nonce format incorrect")
+	end := start
+	for end < len(message) {
+		end++
 	}
 
-	return message[start : start+end], nil
+	if end == start {
+		return "", errors.New("empty nonce")
+	}
+
+	nonce := strings.TrimSpace(message[start:end])
+	if nonce == "" {
+		return "", errors.New("empty nonce after trimming")
+	}
+
+	return nonce, nil
 }
