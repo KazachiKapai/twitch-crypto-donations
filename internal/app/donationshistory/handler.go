@@ -26,12 +26,12 @@ type Donation struct {
 	SenderAddress  string    `json:"sender_address"`
 	SenderUsername string    `json:"sender_username"`
 	Currency       string    `json:"currency"`
-	Text           string    `json:"text"`
-	AudioUrl       string    `json:"audio_url"`
-	ImageUrl       string    `json:"image_url"`
-	DurationMs     float64   `json:"duration_ms"`
-	Layout         string    `json:"layout"`
-	Channel        string    `json:"channel"`
+	Text           *string   `json:"text"`
+	AudioUrl       *string   `json:"audio_url"`
+	ImageUrl       *string   `json:"image_url"`
+	DurationMs     *float64  `json:"duration_ms"`
+	Layout         *string   `json:"layout"`
+	Channel        *string   `json:"channel"`
 	CreatedAt      time.Time `json:"created_at"`
 }
 
