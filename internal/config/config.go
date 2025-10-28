@@ -8,10 +8,12 @@ import (
 	"strings"
 	"time"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
+	"twitch-crypto-donations/internal/app/setuserinfo"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/pkg/environment"
@@ -144,13 +146,17 @@ var WireSet = wire.NewSet(
 	httppkg.New,
 	obsservice.New,
 	senddonate.New,
+	setuserinfo.New,
 	setobswebhooks.New,
 	noncegeneration.New,
+	getstreamerinfo.New,
 	donationshistory.New,
 	paymentconfirmation.New,
 	signatureverification.New,
 	updatedefaultobssettings.New,
 
+	wire.Bind(new(setuserinfo.Database), new(*sql.DB)),
+	wire.Bind(new(getstreamerinfo.Database), new(*sql.DB)),
 	wire.Bind(new(updatedefaultobssettings.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(donationshistory.Database), new(*sql.DB)),
 	wire.Bind(new(paymentconfirmation.RpcClient), new(*rpc.Client)),

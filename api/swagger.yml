@@ -286,6 +286,117 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/streamer-info/{username}:
+    get:
+      summary: Get public streamer information
+      description: Retrieves public profile information for a streamer by username
+      tags:
+        - User
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The streamer's username
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUserInfo'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/secure/me:
+    put:
+      summary: Update authenticated user information
+      description: Updates profile information for the authenticated user
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User information updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - JWT token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get authenticated user information
+      description: Retrieves complete profile information for the authenticated user including widget URLs
+      tags:
+        - User
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '401':
+          description: Unauthorized - JWT token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/secure/donations-history:
     get:
       summary: Get donation history for authenticated user
@@ -346,11 +457,13 @@ components:
           type: string
           description: Name or identifier of the default notification sound
           example: "chime"
+          nullable: true
         default_alert_image:
           type: string
           format: uri
           description: URL to the default image to display with alerts
           example: "https://images.example.com/default-alert.png"
+          nullable: true
         default_alert_duration:
           type: integer
           format: int64
@@ -358,6 +471,7 @@ components:
           minimum: 1000
           maximum: 60000
           example: 5000
+          nullable: true
 
     SetObsWebhooksRequest:
       type: object
@@ -479,6 +593,7 @@ components:
 
     AlertEvent:
       type: object
+      nullable: true
       required:
         - enable
       properties:
@@ -490,24 +605,29 @@ components:
           type: string
           description: Name or identifier of the notification sound to play
           example: "chime"
+          nullable: true
         voice_url:
           type: string
           format: uri
           description: URL to the voice/TTS audio file
           example: "https://storage.googleapis.com/your-bucket/tts_123.mp3"
+          nullable: true
         image_url:
           type: string
           format: uri
           description: URL to an image to display with the alert
           example: "https://images.example.com/avatar.png"
+          nullable: true
         gif_url:
           type: string
           format: uri
           description: URL to an animated GIF to display with the alert
           example: "https://media.giphy.com/media/example.gif"
+          nullable: true
 
     MediaEvent:
       type: object
+      nullable: true
       required:
         - enable
         - youtube_url
@@ -527,27 +647,32 @@ components:
           description: Start time in seconds for the video playback
           minimum: 0
           example: 10
+          nullable: true
         end_time:
           type: integer
           format: int64
           description: End time in seconds for the video playback
           minimum: 0
           example: 40
+          nullable: true
         auto_play:
           type: boolean
           description: Whether to automatically play the video
           default: false
           example: true
+          nullable: true
         controls:
           type: boolean
           description: Whether to show video player controls
           default: true
           example: true
+          nullable: true
         mute:
           type: boolean
           description: Whether to mute the video audio
           default: false
           example: false
+          nullable: true
 
     DonationResponse:
       type: object
@@ -674,6 +799,67 @@ components:
           format: date-time
           description: Timestamp of when the donation was created
           example: "2025-10-27T10:30:00Z"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          nullable: true
+          description: User's username
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: User's email address
+        display_name:
+          type: string
+          nullable: true
+          description: User's display name
+        bio:
+          type: string
+          nullable: true
+          description: User's biography
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          description: URL to user's avatar image
+
+    PublicUserInfo:
+      type: object
+      properties:
+        username:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        display_name:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    UserInfo:
+      allOf:
+        - $ref: '#/components/schemas/PublicUserInfo'
+        - type: object
+          properties:
+            alerts_widget_url:
+              type: string
+              nullable: true
+            media_widget_url:
+              type: string
+              nullable: true
 
     Error:
       type: object

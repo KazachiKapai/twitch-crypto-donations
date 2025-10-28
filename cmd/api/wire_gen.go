@@ -9,10 +9,12 @@ package main
 import (
 	"context"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
+	"twitch-crypto-donations/internal/app/setuserinfo"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/config"
@@ -57,6 +59,8 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	db := config.NewDatabase(connectionString, migrationsDir)
+	handler := setuserinfo.New(db)
+	getstreamerinfoHandler := getstreamerinfo.New(db)
 	client := config.NewHttpClient()
 	httpClient := http.New(client)
 	obsServiceDomain, err := environment.GetOBSServiceDomain()
@@ -64,7 +68,7 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	obsService := obsservice.New(db, httpClient, obsServiceDomain)
-	handler := setobswebhooks.New(db, obsService, obsServiceDomain)
+	setobswebhooksHandler := setobswebhooks.New(db, obsService, obsServiceDomain)
 	senddonateHandler := senddonate.New(obsService)
 	noncegenerationHandler := noncegeneration.New(db)
 	rpcEndpoint, err := environment.GetRpcEndpoint()
@@ -86,7 +90,9 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	donationshistoryHandler := donationshistory.New(db)
 	updatedefaultobssettingsHandler := updatedefaultobssettings.New(obsService)
 	handlers := router.Handlers{
-		SetObsWebhooks:           handler,
+		SetUserInfo:              handler,
+		GetStreamerInfo:          getstreamerinfoHandler,
+		SetObsWebhooks:           setobswebhooksHandler,
 		SendDonate:               senddonateHandler,
 		NonceGenerator:           noncegenerationHandler,
 		PaymentConfirmation:      paymentconfirmationHandler,

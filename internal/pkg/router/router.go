@@ -3,10 +3,12 @@ package router
 import (
 	"fmt"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
 	"twitch-crypto-donations/internal/app/senddonate"
 	"twitch-crypto-donations/internal/app/setobswebhooks"
+	"twitch-crypto-donations/internal/app/setuserinfo"
 	"twitch-crypto-donations/internal/app/signatureverification"
 	"twitch-crypto-donations/internal/app/updatedefaultobssettings"
 	"twitch-crypto-donations/internal/pkg/environment"
@@ -19,6 +21,8 @@ import (
 )
 
 type Handlers struct {
+	SetUserInfo              *setuserinfo.Handler
+	GetStreamerInfo          *getstreamerinfo.Handler
 	SetObsWebhooks           *setobswebhooks.Handler
 	SendDonate               *senddonate.Handler
 	NonceGenerator           *noncegeneration.Handler
@@ -47,6 +51,8 @@ func New(
 	secure.Use(middlewares...)
 	secure.Use(jwtMiddleware)
 	{
+		secure.PUT("/me", middleware.New(handlers.SetUserInfo).Handle)
+		secure.GET("/me", middleware.New(handlers.GetStreamerInfo).Handle)
 		secure.GET("/donations-history", middleware.New(handlers.DonationsHistory).Handle)
 		secure.PUT("/update-default-obs-settings", middleware.New(handlers.UpdateDefaultObsSettings).Handle)
 	}
@@ -54,6 +60,7 @@ func New(
 	api := engine.Group(string(routePrefix))
 	api.Use(middlewares...)
 	{
+		api.GET("/streamer-info/:username", middleware.New(handlers.GetStreamerInfo).Handle)
 		api.POST("/generate-nonce", middleware.New(handlers.NonceGenerator).Handle)
 		api.POST("/verify-signature", middleware.New(handlers.SignatureVerification).Handle)
 		api.POST("/set-obs-webhooks", middleware.New(handlers.SetObsWebhooks).Handle)
