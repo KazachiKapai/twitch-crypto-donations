@@ -18,11 +18,13 @@ const (
 
 type JwtMiddleware struct {
 	jwtSecret environment.JwtSecret
+	logger    Logger
 }
 
-func NewJwtMiddleware(jwtSecret environment.JwtSecret) *JwtMiddleware {
+func NewJwtMiddleware(jwtSecret environment.JwtSecret, logger Logger) *JwtMiddleware {
 	return &JwtMiddleware{
 		jwtSecret: jwtSecret,
+		logger:    logger,
 	}
 }
 
@@ -57,6 +59,8 @@ func (m *JwtMiddleware) Request() gin.HandlerFunc {
 		if claims, ok := token.Claims.(*_jwt.UserClaims); ok && token.Valid {
 			c.Set(AddressKey, claims.Address)
 			c.Set(ClaimsKey, claims)
+
+			m.logger.Info("user claims", "address", claims.Address)
 
 			c.Next()
 		} else {

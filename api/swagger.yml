@@ -58,6 +58,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/get-default-obs-settings/{address}:
+    get:
+      summary: Get default OBS alert settings for a wallet address
+      description: |
+        Retrieves the default OBS alert settings configured for a specific wallet address.
+        These settings are applied to donation alerts unless overridden by individual events.
+      tags:
+        - OBS Service
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The Solana wallet address
+          example: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+      responses:
+        '200':
+          description: Successfully retrieved default OBS settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAlertSettingsResponse'
+              example:
+                default_notification_sound: "chime"
+                default_alert_image: "https://images.example.com/default-alert.png"
+                default_alert_duration: 5000
+        '400':
+          description: Bad request - invalid wallet address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Wallet not found or no settings configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Wallet not found"
+                code: "WALLET_NOT_FOUND"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/send-donate:
     post:
       summary: Send a donation alert or media event
@@ -243,7 +292,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/update-default-obs-settings:
+  /api/secure/update-default-obs-settings:
     put:
       summary: Update default OBS alert settings
       description: |
@@ -828,7 +877,11 @@ components:
 
     PublicUserInfo:
       type: object
+      required:
+        - wallet
       properties:
+        wallet:
+          type: string
         username:
           type: string
           nullable: true
@@ -860,6 +913,27 @@ components:
             media_widget_url:
               type: string
               nullable: true
+
+    GetAlertSettingsResponse:
+      type: object
+      properties:
+        default_notification_sound:
+          type: string
+          description: The default notification sound identifier
+          example: "chime"
+          nullable: true
+        default_alert_image:
+          type: string
+          format: uri
+          description: URL to the default alert image
+          example: "https://images.example.com/default-alert.png"
+          nullable: true
+        default_alert_duration:
+          type: integer
+          format: int64
+          description: Default duration in milliseconds for alert display
+          example: 5000
+          nullable: true
 
     Error:
       type: object

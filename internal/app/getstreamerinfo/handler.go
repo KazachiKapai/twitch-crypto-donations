@@ -87,14 +87,10 @@ func (h *Handler) getUserInfo(wallet string) (*UserInfo, error) {
 
 	var userInfo UserInfo
 	err := h.db.QueryRow(query, wallet).Scan(
-		&userInfo.Wallet,
-		&userInfo.Username,
-		&userInfo.Email,
-		&userInfo.DisplayName,
-		&userInfo.Bio,
-		&userInfo.AvatarUrl,
-		&userInfo.CreatedAt,
-		&userInfo.AlertsWidgetUrl,
+		&userInfo.Wallet, &userInfo.Username,
+		&userInfo.Email, &userInfo.DisplayName,
+		&userInfo.Bio, &userInfo.AvatarUrl,
+		&userInfo.CreatedAt, &userInfo.AlertsWidgetUrl,
 		&userInfo.MediaWidgetUrl,
 	)
 

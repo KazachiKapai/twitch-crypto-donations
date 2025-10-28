@@ -56,6 +56,14 @@ type SkipRequest struct {
 	WidgetType string `json:"widget_type"`
 }
 
+type GetAlertSettingsResponse struct {
+	Ok                       bool    `json:"ok"`
+	Channel                  string  `json:"channel"`
+	DefaultNotificationSound *string `json:"default_notification_sound"`
+	DefaultAlertImage        *string `json:"default_alert_image"`
+	DefaultAlertDuration     *int64  `json:"default_alert_duration"`
+}
+
 type ErrorResponse struct {
 	Detail []struct {
 		Items struct {

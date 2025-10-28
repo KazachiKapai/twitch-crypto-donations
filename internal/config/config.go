@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
@@ -19,6 +20,7 @@ import (
 	"twitch-crypto-donations/internal/pkg/environment"
 	httppkg "twitch-crypto-donations/internal/pkg/http"
 	"twitch-crypto-donations/internal/pkg/jwt"
+	"twitch-crypto-donations/internal/pkg/logger"
 	"twitch-crypto-donations/internal/pkg/middleware"
 	"twitch-crypto-donations/internal/pkg/obsservice"
 	"twitch-crypto-donations/internal/pkg/router"
@@ -28,6 +30,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 	"github.com/pressly/goose/v3"
+	"github.com/sirupsen/logrus"
 
 	_ "github.com/lib/pq"
 )
@@ -35,6 +38,10 @@ import (
 type (
 	ConnectionString string
 )
+
+func NewLogger() *logger.LogrusAdapter {
+	return logger.New(logrus.StandardLogger())
+}
 
 func NewHttpClient() *http.Client {
 	return &http.Client{}
@@ -111,13 +118,15 @@ func NewConnectionString(
 	return ConnectionString(connStr)
 }
 
-func NewEngine(handlers router.Handlers, prefixRouter environment.RoutePrefix, swaggerPath environment.SwaggerPath, jwtMiddleware gin.HandlerFunc, middlewares []gin.HandlerFunc) *gin.Engine {
-	return router.New(gin.New(), handlers, prefixRouter, swaggerPath, jwtMiddleware, middlewares...)
-}
-
-func NewJwtMiddleware(jwtSecret environment.JwtSecret) gin.HandlerFunc {
-	jwtMiddleware := middleware.NewJwtMiddleware(jwtSecret)
-	return jwtMiddleware.Request()
+func NewEngine(
+	handlers router.Handlers,
+	prefixRouter environment.RoutePrefix,
+	swaggerPath environment.SwaggerPath,
+	secret environment.JwtSecret,
+	logger *logger.LogrusAdapter,
+	middlewares []gin.HandlerFunc,
+) *gin.Engine {
+	return router.New(gin.New(), handlers, prefixRouter, swaggerPath, middleware.NewJwtMiddleware(secret, logger), middlewares...)
 }
 
 func NewMiddlewares(appEnv environment.AppEnv, path environment.SwaggerPath) []gin.HandlerFunc {
@@ -152,9 +161,12 @@ var WireSet = wire.NewSet(
 	getstreamerinfo.New,
 	donationshistory.New,
 	paymentconfirmation.New,
+	getdefaultobssettings.New,
 	signatureverification.New,
 	updatedefaultobssettings.New,
 
+	wire.Bind(new(getdefaultobssettings.Database), new(*sql.DB)),
+	wire.Bind(new(getdefaultobssettings.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(setuserinfo.Database), new(*sql.DB)),
 	wire.Bind(new(getstreamerinfo.Database), new(*sql.DB)),
 	wire.Bind(new(updatedefaultobssettings.ObsService), new(*obsservice.ObsService)),
@@ -166,13 +178,15 @@ var WireSet = wire.NewSet(
 	wire.Bind(new(setobswebhooks.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(setobswebhooks.Database), new(*sql.DB)),
 	wire.Bind(new(senddonate.ObsService), new(*obsservice.ObsService)),
+	wire.Bind(new(senddonate.Database), new(*sql.DB)),
+	wire.Bind(new(obsservice.Logger), new(*logger.LogrusAdapter)),
 	wire.Bind(new(obsservice.Database), new(*sql.DB)),
 	wire.Bind(new(obsservice.HttpClient), new(*httppkg.Client)),
 	wire.Bind(new(httppkg.HttpClient), new(*http.Client)),
 
 	wire.Struct(new(router.Handlers), "*"),
 
-	NewJwtMiddleware,
+	NewLogger,
 	NewRpcClient,
 	NewConnectionString,
 	NewDatabase,

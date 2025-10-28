@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
@@ -29,6 +30,7 @@ type Handlers struct {
 	PaymentConfirmation      *paymentconfirmation.Handler
 	SignatureVerification    *signatureverification.Handler
 	DonationsHistory         *donationshistory.Handler
+	GetDefaultObsSettings    *getdefaultobssettings.Handler
 	UpdateDefaultObsSettings *updatedefaultobssettings.Handler
 }
 
@@ -37,7 +39,7 @@ func New(
 	handlers Handlers,
 	routePrefix environment.RoutePrefix,
 	swaggerPath environment.SwaggerPath,
-	jwtMiddleware gin.HandlerFunc,
+	jwtMiddleware *middleware.JwtMiddleware,
 	middlewares ...gin.HandlerFunc,
 ) *gin.Engine {
 	engine.StaticFile("/swagger.yml", string(swaggerPath))
@@ -49,7 +51,7 @@ func New(
 
 	secure := engine.Group(fmt.Sprintf("%s/secure", routePrefix))
 	secure.Use(middlewares...)
-	secure.Use(jwtMiddleware)
+	secure.Use(jwtMiddleware.Request())
 	{
 		secure.PUT("/me", middleware.New(handlers.SetUserInfo).Handle)
 		secure.GET("/me", middleware.New(handlers.GetStreamerInfo).Handle)
@@ -60,6 +62,7 @@ func New(
 	api := engine.Group(string(routePrefix))
 	api.Use(middlewares...)
 	{
+		api.GET("/get-default-obs-settings/:address", middleware.New(handlers.GetDefaultObsSettings).Handle)
 		api.GET("/streamer-info/:username", middleware.New(handlers.GetStreamerInfo).Handle)
 		api.POST("/generate-nonce", middleware.New(handlers.NonceGenerator).Handle)
 		api.POST("/verify-signature", middleware.New(handlers.SignatureVerification).Handle)
