@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"twitch-crypto-donations/internal/app/donationsanalytics"
 	"twitch-crypto-donations/internal/app/donationshistory"
 	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
@@ -160,11 +161,13 @@ var WireSet = wire.NewSet(
 	noncegeneration.New,
 	getstreamerinfo.New,
 	donationshistory.New,
+	donationsanalytics.New,
 	paymentconfirmation.New,
 	getdefaultobssettings.New,
 	signatureverification.New,
 	updatedefaultobssettings.New,
 
+	wire.Bind(new(donationsanalytics.Database), new(*sql.DB)),
 	wire.Bind(new(getdefaultobssettings.Database), new(*sql.DB)),
 	wire.Bind(new(getdefaultobssettings.ObsService), new(*obsservice.ObsService)),
 	wire.Bind(new(setuserinfo.Database), new(*sql.DB)),

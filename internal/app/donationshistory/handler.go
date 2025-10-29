@@ -22,17 +22,17 @@ type ResponseBody struct {
 }
 
 type Donation struct {
-	DonationAmount string    `json:"donation_amount"`
-	SenderAddress  string    `json:"sender_address"`
-	SenderUsername string    `json:"sender_username"`
-	Currency       string    `json:"currency"`
-	Text           *string   `json:"text"`
-	AudioUrl       *string   `json:"audio_url"`
-	ImageUrl       *string   `json:"image_url"`
-	DurationMs     *float64  `json:"duration_ms"`
-	Layout         *string   `json:"layout"`
-	Channel        *string   `json:"channel"`
-	CreatedAt      time.Time `json:"created_at"`
+	ReceiverAddress string    `json:"receiver_address"`
+	DonationAmount  string    `json:"donation_amount"`
+	SenderUsername  string    `json:"sender_username"`
+	Currency        string    `json:"currency"`
+	Text            *string   `json:"text"`
+	AudioUrl        *string   `json:"audio_url"`
+	ImageUrl        *string   `json:"image_url"`
+	DurationMs      *float64  `json:"duration_ms"`
+	Layout          *string   `json:"layout"`
+	Channel         *string   `json:"channel"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type (
@@ -71,10 +71,10 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 func (h *Handler) getDonationsHistory(address string) ([]Donation, int64, error) {
 	query := `
         SELECT 
-            donation_amount, sender_address, sender_username, currency, 
+            receiver, donation_amount, sender_username, currency, 
             text, audio_url, image_url, duration_ms, layout, channel, created_at
         FROM donations_history
-        WHERE sender_address = $1
+        WHERE receiver = $1
         ORDER BY created_at DESC`
 
 	rows, err := h.db.Query(query, address)
@@ -91,7 +91,7 @@ func (h *Handler) getDonationsHistory(address string) ([]Donation, int64, error)
 		var d Donation
 
 		err = rows.Scan(
-			&d.DonationAmount, &d.SenderAddress,
+			&d.ReceiverAddress, &d.DonationAmount,
 			&d.SenderUsername, &d.Currency,
 			&d.Text, &d.AudioUrl, &d.ImageUrl,
 			&d.DurationMs, &d.Layout,

@@ -8,7 +8,9 @@ package main
 
 import (
 	"context"
+	"twitch-crypto-donations/internal/app/donationsanalytics"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
@@ -59,7 +61,8 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	db := config.NewDatabase(connectionString, migrationsDir)
-	handler := setuserinfo.New(db)
+	handler := donationsanalytics.New(db)
+	setuserinfoHandler := setuserinfo.New(db)
 	getstreamerinfoHandler := getstreamerinfo.New(db)
 	client := config.NewHttpClient()
 	httpClient := http.New(client)
@@ -89,9 +92,11 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	manager := jwt.New(tokenExpirationHours, jwtSecret)
 	signatureverificationHandler := signatureverification.New(db, manager)
 	donationshistoryHandler := donationshistory.New(db)
+	getdefaultobssettingsHandler := getdefaultobssettings.New(db, obsService)
 	updatedefaultobssettingsHandler := updatedefaultobssettings.New(obsService)
 	handlers := router.Handlers{
-		SetUserInfo:              handler,
+		DonationsAnalytics:       handler,
+		SetUserInfo:              setuserinfoHandler,
 		GetStreamerInfo:          getstreamerinfoHandler,
 		SetObsWebhooks:           setobswebhooksHandler,
 		SendDonate:               senddonateHandler,
@@ -99,6 +104,7 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		PaymentConfirmation:      paymentconfirmationHandler,
 		SignatureVerification:    signatureverificationHandler,
 		DonationsHistory:         donationshistoryHandler,
+		GetDefaultObsSettings:    getdefaultobssettingsHandler,
 		UpdateDefaultObsSettings: updatedefaultobssettingsHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()

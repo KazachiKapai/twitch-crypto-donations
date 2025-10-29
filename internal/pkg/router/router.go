@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"twitch-crypto-donations/internal/app/donationsanalytics"
 	"twitch-crypto-donations/internal/app/donationshistory"
 	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
@@ -22,6 +23,7 @@ import (
 )
 
 type Handlers struct {
+	DonationsAnalytics       *donationsanalytics.Handler
 	SetUserInfo              *setuserinfo.Handler
 	GetStreamerInfo          *getstreamerinfo.Handler
 	SetObsWebhooks           *setobswebhooks.Handler
@@ -53,6 +55,7 @@ func New(
 	secure.Use(middlewares...)
 	secure.Use(jwtMiddleware.Request())
 	{
+		secure.GET("/donations-analytics", middleware.New(handlers.DonationsAnalytics).Handle)
 		secure.PUT("/me", middleware.New(handlers.SetUserInfo).Handle)
 		secure.GET("/me", middleware.New(handlers.GetStreamerInfo).Handle)
 		secure.GET("/donations-history", middleware.New(handlers.DonationsHistory).Handle)

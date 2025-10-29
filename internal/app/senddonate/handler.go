@@ -20,12 +20,12 @@ type ObsService interface {
 }
 
 type RequestBody struct {
-	Wallet     string   `json:"wallet"`
-	Username   *string  `json:"username"`
-	Amount     *float64 `json:"amount"`
-	Currency   *string  `json:"currency"`
-	Message    *string  `json:"message"`
-	DurationMs *int64   `json:"duration_ms"`
+	Receiver       string   `json:"receiver"`
+	SenderUsername *string  `json:"sender_username"`
+	Amount         *float64 `json:"amount"`
+	Currency       *string  `json:"currency"`
+	Message        *string  `json:"message"`
+	DurationMs     *int64   `json:"duration_ms"`
 
 	AlertEvent *AlertRequest `json:"alert_event"`
 	MediaEvent *MediaRequest `json:"media_event"`
@@ -77,8 +77,8 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 	channels := make(map[string]struct{})
 
 	if request.Body.MediaEvent != nil && request.Body.MediaEvent.Enable {
-		_, channel, err := h.obsService.WebhookMedia(request.Body.Wallet, obsservice.MediaEvent{
-			Username:   request.Body.Username,
+		_, channel, err := h.obsService.WebhookMedia(request.Body.Receiver, obsservice.MediaEvent{
+			Username:   request.Body.SenderUsername,
 			Amount:     request.Body.Amount,
 			Currency:   request.Body.Currency,
 			Message:    request.Body.Message,
@@ -99,8 +99,8 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 	}
 
 	if request.Body.AlertEvent != nil && request.Body.AlertEvent.Enable {
-		_, channel, err := h.obsService.WebhookAlert(request.Body.Wallet, obsservice.AlertEvent{
-			Username:          request.Body.Username,
+		_, channel, err := h.obsService.WebhookAlert(request.Body.Receiver, obsservice.AlertEvent{
+			Username:          request.Body.SenderUsername,
 			Amount:            request.Body.Amount,
 			Currency:          request.Body.Currency,
 			Message:           request.Body.Message,
@@ -146,8 +146,8 @@ func (h *Handler) saveDonation(request Request, channels map[string]struct{}) []
 		}
 
 		username := ""
-		if request.Body.Username != nil {
-			username = *request.Body.Username
+		if request.Body.SenderUsername != nil {
+			username = *request.Body.SenderUsername
 		}
 
 		currency := ""
@@ -173,12 +173,11 @@ func (h *Handler) saveDonation(request Request, channels map[string]struct{}) []
 
 		_, err := h.db.Exec(
 			`INSERT INTO donations_history 
-			(donation_amount, sender_address, sender_username, currency, text, audio_url, image_url, duration_ms, layout, channel) 
+			(receiver, donation_amount, sender_username, currency, text, audio_url, image_url, duration_ms, layout, channel) 
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			amount, request.Body.Wallet,
-			username, currency,
-			request.Body.Message, audioURL,
-			imageURL, durationMs,
+			request.Body.Receiver, amount,
+			username, currency, request.Body.Message,
+			audioURL, imageURL, durationMs,
 			layout, channel,
 		)
 
