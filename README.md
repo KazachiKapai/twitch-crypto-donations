@@ -31,6 +31,12 @@ Our team is composed of top-tier engineers and Solana Day Kazakhstan winners, wi
 - **User Profile Management**: Allows streamers to manage their public profiles, including username, display name, and avatar.
 - **Donation History**: Provides an endpoint for authenticated users to view their donation history.
 
+## Related Repositories
+
+- **Frontend**: [kapachi-pay-ui](https://github.com/KazachiKapai/kapachi-pay-ui)
+- **OBS Service API**: [obs_crypto_alerts](https://github.com/KazachiKapai/obs_crypto_alerts)
+- **Audio Service API**: [audio-service](https://github.com/KazachiKapai/audio-service)
+
 ## Tech Stack & Technical Decisions
 
 - **Language**: Go
