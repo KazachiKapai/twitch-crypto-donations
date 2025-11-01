@@ -2,23 +2,30 @@ package senddonate
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"net/http"
 	"twitch-crypto-donations/internal/pkg/middleware"
 	"twitch-crypto-donations/internal/pkg/obsservice"
 )
 
+type Database interface {
+	QueryRow(query string, args ...any) *sql.Row
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 type ObsService interface {
-	WebhookAlert(wallet string, request obsservice.AlertEvent) (any, error)
-	WebhookMedia(wallet string, request obsservice.MediaEvent) (any, error)
+	WebhookAlert(wallet string, request obsservice.AlertEvent) (any, string, error)
+	WebhookMedia(wallet string, request obsservice.MediaEvent) (any, string, error)
 }
 
 type RequestBody struct {
-	Wallet     string   `json:"wallet"`
-	Username   *string  `json:"username"`
-	Amount     *float64 `json:"amount"`
-	Currency   *string  `json:"currency"`
-	Message    *string  `json:"message"`
-	DurationMs *int64   `json:"duration_ms"`
+	Receiver       string   `json:"receiver"`
+	SenderUsername *string  `json:"sender_username"`
+	Amount         *float64 `json:"amount"`
+	Currency       *string  `json:"currency"`
+	Message        *string  `json:"message"`
+	DurationMs     *int64   `json:"duration_ms"`
 
 	AlertEvent *AlertRequest `json:"alert_event"`
 	MediaEvent *MediaRequest `json:"media_event"`
@@ -58,18 +65,20 @@ type (
 
 type Handler struct {
 	obsService ObsService
+	db         Database
 }
 
-func New(obsService ObsService) *Handler {
-	return &Handler{obsService: obsService}
+func New(obsService ObsService, db Database) *Handler {
+	return &Handler{obsService: obsService, db: db}
 }
 
 func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) {
 	response := ResponseBody{Errors: make([]Error, 0, 2)}
+	channels := make(map[string]struct{})
 
 	if request.Body.MediaEvent != nil && request.Body.MediaEvent.Enable {
-		_, err := h.obsService.WebhookMedia(request.Body.Wallet, obsservice.MediaEvent{
-			Username:   request.Body.Username,
+		_, channel, err := h.obsService.WebhookMedia(request.Body.Receiver, obsservice.MediaEvent{
+			Username:   request.Body.SenderUsername,
 			Amount:     request.Body.Amount,
 			Currency:   request.Body.Currency,
 			Message:    request.Body.Message,
@@ -85,11 +94,13 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 		if err != nil {
 			response.Errors = append(response.Errors, Error{Message: err.Error()})
 		}
+
+		channels[channel] = struct{}{}
 	}
 
 	if request.Body.AlertEvent != nil && request.Body.AlertEvent.Enable {
-		_, err := h.obsService.WebhookAlert(request.Body.Wallet, obsservice.AlertEvent{
-			Username:          request.Body.Username,
+		_, channel, err := h.obsService.WebhookAlert(request.Body.Receiver, obsservice.AlertEvent{
+			Username:          request.Body.SenderUsername,
 			Amount:            request.Body.Amount,
 			Currency:          request.Body.Currency,
 			Message:           request.Body.Message,
@@ -103,12 +114,77 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 		if err != nil {
 			response.Errors = append(response.Errors, Error{Message: err.Error()})
 		}
+
+		channels[channel] = struct{}{}
 	}
 
-	statusCode := http.StatusOK
 	if len(response.Errors) > 0 {
-		statusCode = http.StatusInternalServerError
+		return &Response{Body: response, StatusCode: http.StatusInternalServerError}, nil
 	}
 
-	return &Response{Body: response, StatusCode: statusCode}, nil
+	if errors := h.saveDonation(request, channels); len(errors) > 0 {
+		return &Response{Body: ResponseBody{Errors: errors}, StatusCode: http.StatusInternalServerError}, nil
+	}
+
+	return &Response{Body: response}, nil
+}
+
+func (h *Handler) saveDonation(request Request, channels map[string]struct{}) []Error {
+	errors := make([]Error, 0, len(channels))
+
+	for channel := range channels {
+		var layout string
+		if request.Body.MediaEvent != nil && request.Body.MediaEvent.Enable {
+			layout = "media"
+		} else if request.Body.AlertEvent != nil && request.Body.AlertEvent.Enable {
+			layout = "alert"
+		}
+
+		amount := ""
+		if request.Body.Amount != nil {
+			amount = fmt.Sprintf("%f", *request.Body.Amount)
+		}
+
+		username := ""
+		if request.Body.SenderUsername != nil {
+			username = *request.Body.SenderUsername
+		}
+
+		currency := ""
+		if request.Body.Currency != nil {
+			currency = *request.Body.Currency
+		}
+
+		var durationMs *float64
+		if request.Body.DurationMs != nil {
+			duration := float64(*request.Body.DurationMs)
+			durationMs = &duration
+		}
+
+		var audioURL, imageURL *string
+		if request.Body.AlertEvent != nil {
+			audioURL = request.Body.AlertEvent.VoiceUrl
+			if request.Body.AlertEvent.ImageUrl != nil {
+				imageURL = request.Body.AlertEvent.ImageUrl
+			} else {
+				imageURL = request.Body.AlertEvent.GifUrl
+			}
+		}
+
+		_, err := h.db.Exec(
+			`INSERT INTO donations_history 
+			(receiver, donation_amount, sender_username, currency, text, audio_url, image_url, duration_ms, layout, channel) 
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			request.Body.Receiver, amount,
+			username, currency, request.Body.Message,
+			audioURL, imageURL, durationMs,
+			layout, channel,
+		)
+
+		if err != nil {
+			errors = append(errors, Error{Message: "Failed to save donation history: " + err.Error()})
+		}
+	}
+
+	return errors
 }

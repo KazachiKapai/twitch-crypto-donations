@@ -17,6 +17,7 @@ type Database interface {
 }
 
 type UserInfo struct {
+	Wallet      string     `json:"wallet"`
 	Username    *string    `json:"username"`
 	Email       *string    `json:"email"`
 	DisplayName *string    `json:"display_name"`
@@ -76,7 +77,7 @@ func (h *Handler) Handle(_ context.Context, request Request) (*Response, error) 
 
 func (h *Handler) getUserInfo(wallet string) (*UserInfo, error) {
 	query := `
-        SELECT username, email,
+        SELECT wallet, username, email,
             display_name, bio,
             avatar_url, created_at,
             alerts_widget_url, media_widget_url
@@ -86,13 +87,10 @@ func (h *Handler) getUserInfo(wallet string) (*UserInfo, error) {
 
 	var userInfo UserInfo
 	err := h.db.QueryRow(query, wallet).Scan(
-		&userInfo.Username,
-		&userInfo.Email,
-		&userInfo.DisplayName,
-		&userInfo.Bio,
-		&userInfo.AvatarUrl,
-		&userInfo.CreatedAt,
-		&userInfo.AlertsWidgetUrl,
+		&userInfo.Wallet, &userInfo.Username,
+		&userInfo.Email, &userInfo.DisplayName,
+		&userInfo.Bio, &userInfo.AvatarUrl,
+		&userInfo.CreatedAt, &userInfo.AlertsWidgetUrl,
 		&userInfo.MediaWidgetUrl,
 	)
 
@@ -109,7 +107,7 @@ func (h *Handler) getUserInfo(wallet string) (*UserInfo, error) {
 
 func (h *Handler) getStreamerInfo(username string) (*UserInfo, error) {
 	query := `
-        SELECT username, email,
+        SELECT wallet, username, email,
             display_name, bio,
             avatar_url, created_at
         FROM users
@@ -118,6 +116,7 @@ func (h *Handler) getStreamerInfo(username string) (*UserInfo, error) {
 
 	var userInfo UserInfo
 	err := h.db.QueryRow(query, username).Scan(
+		&userInfo.Wallet,
 		&userInfo.Username,
 		&userInfo.Email,
 		&userInfo.DisplayName,

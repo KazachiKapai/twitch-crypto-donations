@@ -8,7 +8,9 @@ package main
 
 import (
 	"context"
+	"twitch-crypto-donations/internal/app/donationsanalytics"
 	"twitch-crypto-donations/internal/app/donationshistory"
+	"twitch-crypto-donations/internal/app/getdefaultobssettings"
 	"twitch-crypto-donations/internal/app/getstreamerinfo"
 	"twitch-crypto-donations/internal/app/noncegeneration"
 	"twitch-crypto-donations/internal/app/paymentconfirmation"
@@ -59,17 +61,19 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		return nil, err
 	}
 	db := config.NewDatabase(connectionString, migrationsDir)
-	handler := setuserinfo.New(db)
+	handler := donationsanalytics.New(db)
+	setuserinfoHandler := setuserinfo.New(db)
 	getstreamerinfoHandler := getstreamerinfo.New(db)
 	client := config.NewHttpClient()
 	httpClient := http.New(client)
+	logrusAdapter := config.NewLogger()
 	obsServiceDomain, err := environment.GetOBSServiceDomain()
 	if err != nil {
 		return nil, err
 	}
-	obsService := obsservice.New(db, httpClient, obsServiceDomain)
+	obsService := obsservice.New(db, httpClient, logrusAdapter, obsServiceDomain)
 	setobswebhooksHandler := setobswebhooks.New(db, obsService, obsServiceDomain)
-	senddonateHandler := senddonate.New(obsService)
+	senddonateHandler := senddonate.New(obsService, db)
 	noncegenerationHandler := noncegeneration.New(db)
 	rpcEndpoint, err := environment.GetRpcEndpoint()
 	if err != nil {
@@ -88,9 +92,11 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	manager := jwt.New(tokenExpirationHours, jwtSecret)
 	signatureverificationHandler := signatureverification.New(db, manager)
 	donationshistoryHandler := donationshistory.New(db)
+	getdefaultobssettingsHandler := getdefaultobssettings.New(db, obsService)
 	updatedefaultobssettingsHandler := updatedefaultobssettings.New(obsService)
 	handlers := router.Handlers{
-		SetUserInfo:              handler,
+		DonationsAnalytics:       handler,
+		SetUserInfo:              setuserinfoHandler,
 		GetStreamerInfo:          getstreamerinfoHandler,
 		SetObsWebhooks:           setobswebhooksHandler,
 		SendDonate:               senddonateHandler,
@@ -98,6 +104,7 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 		PaymentConfirmation:      paymentconfirmationHandler,
 		SignatureVerification:    signatureverificationHandler,
 		DonationsHistory:         donationshistoryHandler,
+		GetDefaultObsSettings:    getdefaultobssettingsHandler,
 		UpdateDefaultObsSettings: updatedefaultobssettingsHandler,
 	}
 	routePrefix, err := environment.GetRoutePrefix()
@@ -108,13 +115,12 @@ func InitializeServer(ctx context.Context) (*server.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	handlerFunc := config.NewJwtMiddleware(jwtSecret)
 	appEnv, err := environment.GetAppEnv()
 	if err != nil {
 		return nil, err
 	}
 	v := config.NewMiddlewares(appEnv, swaggerPath)
-	engine := config.NewEngine(handlers, routePrefix, swaggerPath, handlerFunc, v)
+	engine := config.NewEngine(handlers, routePrefix, swaggerPath, jwtSecret, logrusAdapter, v)
 	httpListenPort, err := environment.GetHTTPListenPort()
 	if err != nil {
 		return nil, err

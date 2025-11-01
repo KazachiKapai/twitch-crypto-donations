@@ -12,11 +12,13 @@ import (
 	"time"
 	"twitch-crypto-donations/internal/pkg/environment"
 	"twitch-crypto-donations/internal/pkg/http"
-	"twitch-crypto-donations/internal/pkg/logger"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 )
+
+type Logger interface {
+	Info(msg string, ctx ...interface{})
+}
 
 type HttpClient interface {
 	NewRequest(method, url string) *http.RequestBuilder
@@ -33,12 +35,14 @@ type Database interface {
 type ObsService struct {
 	obsDomain  environment.OBSServiceDomain
 	httpClient HttpClient
+	logger     Logger
 	db         Database
 }
 
-func New(db Database, httpClient HttpClient, obsDomain environment.OBSServiceDomain) *ObsService {
+func New(db Database, httpClient HttpClient, logger Logger, obsDomain environment.OBSServiceDomain) *ObsService {
 	return &ObsService{
 		db:         db,
+		logger:     logger,
 		httpClient: httpClient,
 		obsDomain:  obsDomain,
 	}
@@ -49,9 +53,22 @@ func (s *ObsService) CreateChannel(request ChannelCreateRequest) (*ChannelCreate
 
 	var response ChannelCreateResponse
 	err := s.httpClient.
-		WithLogger(logger.New(logrus.StandardLogger())).
+		WithLogger(s.logger).
 		Post(url).
 		WithJSON(request).
+		DecodeResponseJSON().
+		Parse(&response)
+	return &response, err
+}
+
+func (s *ObsService) GetAlertSettings(channel string) (*GetAlertSettingsResponse, error) {
+	url := fmt.Sprintf("%s/channels/%s/settings", s.obsDomain, channel)
+
+	var response GetAlertSettingsResponse
+	err := s.httpClient.
+		WithLogger(s.logger).
+		Get(url).
+		WithJSON(&response).
 		DecodeResponseJSON().
 		Parse(&response)
 	return &response, err
@@ -65,6 +82,8 @@ func (s *ObsService) UpdateAlertSettings(wallet string, request AlertSettings) (
 		request.Channel = channel
 	}
 
+	s.logger.Info("user metadata", "channel", channel, "webhook secret", webhookSecret)
+
 	timestamp, nonce, signature, err := s.generateSignature(webhookSecret, request)
 	if err != nil {
 		return nil, err
@@ -72,7 +91,7 @@ func (s *ObsService) UpdateAlertSettings(wallet string, request AlertSettings) (
 
 	var response any
 	err = s.httpClient.
-		WithLogger(logger.New(logrus.StandardLogger())).
+		WithLogger(s.logger).
 		Post(url).
 		WithJSON(request).
 		WithHeaders(map[string]string{
@@ -85,7 +104,7 @@ func (s *ObsService) UpdateAlertSettings(wallet string, request AlertSettings) (
 	return response, err
 }
 
-func (s *ObsService) WebhookAlert(wallet string, request AlertEvent) (any, error) {
+func (s *ObsService) WebhookAlert(wallet string, request AlertEvent) (any, string, error) {
 	url := fmt.Sprintf("%s/webhooks/alert", s.obsDomain)
 
 	channel, webhookSecret, ok := s.getChannelInfo(wallet)
@@ -95,12 +114,12 @@ func (s *ObsService) WebhookAlert(wallet string, request AlertEvent) (any, error
 
 	timestamp, nonce, signature, err := s.generateSignature(webhookSecret, request)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var response any
 	err = s.httpClient.
-		WithLogger(logger.New(logrus.StandardLogger())).
+		WithLogger(s.logger).
 		Post(url).
 		WithJSON(request).
 		WithHeaders(map[string]string{
@@ -110,10 +129,10 @@ func (s *ObsService) WebhookAlert(wallet string, request AlertEvent) (any, error
 		}).
 		DecodeResponseJSON().
 		Parse(&response)
-	return response, err
+	return response, channel, err
 }
 
-func (s *ObsService) WebhookMedia(wallet string, request MediaEvent) (any, error) {
+func (s *ObsService) WebhookMedia(wallet string, request MediaEvent) (any, string, error) {
 	url := fmt.Sprintf("%s/webhooks/media", s.obsDomain)
 
 	channel, webhookSecret, ok := s.getChannelInfo(wallet)
@@ -123,12 +142,12 @@ func (s *ObsService) WebhookMedia(wallet string, request MediaEvent) (any, error
 
 	timestamp, nonce, signature, err := s.generateSignature(webhookSecret, request)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var response any
 	err = s.httpClient.
-		WithLogger(logger.New(logrus.StandardLogger())).
+		WithLogger(s.logger).
 		Post(url).
 		WithJSON(request).
 		WithHeaders(map[string]string{
@@ -138,7 +157,7 @@ func (s *ObsService) WebhookMedia(wallet string, request MediaEvent) (any, error
 		}).
 		DecodeResponseJSON().
 		Parse(&response)
-	return response, err
+	return response, channel, err
 }
 
 func (s *ObsService) WebhookSkip(wallet string, request MediaEvent) (any, error) {
@@ -156,7 +175,7 @@ func (s *ObsService) WebhookSkip(wallet string, request MediaEvent) (any, error)
 
 	var response any
 	err = s.httpClient.
-		WithLogger(logger.New(logrus.StandardLogger())).
+		WithLogger(s.logger).
 		Post(url).
 		WithJSON(request).
 		WithHeaders(map[string]string{

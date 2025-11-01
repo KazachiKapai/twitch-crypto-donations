@@ -58,6 +58,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/get-default-obs-settings/{address}:
+    get:
+      summary: Get default OBS alert settings for a wallet address
+      description: |
+        Retrieves the default OBS alert settings configured for a specific wallet address.
+        These settings are applied to donation alerts unless overridden by individual events.
+      tags:
+        - OBS Service
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The Solana wallet address
+          example: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+      responses:
+        '200':
+          description: Successfully retrieved default OBS settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAlertSettingsResponse'
+              example:
+                default_notification_sound: "chime"
+                default_alert_image: "https://images.example.com/default-alert.png"
+                default_alert_duration: 5000
+        '400':
+          description: Bad request - invalid wallet address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Wallet not found or no settings configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Wallet not found"
+                code: "WALLET_NOT_FOUND"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/send-donate:
     post:
       summary: Send a donation alert or media event
@@ -79,8 +128,8 @@ paths:
               alert_event:
                 summary: Alert event with voice TTS
                 value:
-                  wallet: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
-                  username: "CryptoWhale"
+                  receiver: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
+                  sender_username: "CryptoWhale"
                   amount: 2.5
                   currency: "SOL"
                   message: "GM! To the moon 🚀"
@@ -243,7 +292,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/update-default-obs-settings:
+  /api/secure/update-default-obs-settings:
     put:
       summary: Update default OBS alert settings
       description: |
@@ -414,8 +463,8 @@ paths:
                 $ref: '#/components/schemas/DonationsHistoryResponse'
               example:
                 donations:
-                  - donation_amount: "2.5"
-                    sender_address: "0xe92a7b67d5d1A5b2f410B7F44Be14333c5E7732c"
+                  - receiver_address: "HwPZZSsCdPiTcPtZ7fNZmx4eMXXKvNB1LFtdVvWg2xnS"
+                    donation_amount: "2.5"
                     sender_username: "CryptoWhale"
                     currency: "SOL"
                     text: "GM! To the moon 🚀"
@@ -442,6 +491,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/secure/donations-analytics:
+    get:
+      summary: Get donation analytics
+      description: Retrieves top donations by single amount, volume, and frequency for the authenticated user
+      operationId: getDonationsAnalytics
+      tags:
+        - Donations
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved donation analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationsAnalyticsResponse'
+              example:
+                top_single_donations:
+                  - receiver_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                    donation_amount: "1000.50"
+                    sender_username: "generous_donor"
+                    currency: "ETH"
+                    text: "Great stream!"
+                    audio_url: ""
+                    image_url: ""
+                    duration_ms: 5000
+                    layout: "default"
+                    channel: "main_channel"
+                    created_at: "2025-10-15T14:30:00Z"
+                top_volume_donations:
+                  - receiver_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                    donation_amount: "5000.00"
+                    sender_username: "regular_supporter"
+                    currency: "ETH"
+                    text: "Keep it up!"
+                    audio_url: "https://example.com/audio.mp3"
+                    image_url: "https://example.com/image.png"
+                    duration_ms: 3000
+                    layout: "compact"
+                    channel: "main_channel"
+                    created_at: "2025-10-20T10:15:00Z"
+                top_frequent_donations:
+                  - receiver_address: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+                    donation_amount: "2500.00"
+                    sender_username: "frequent_fan"
+                    currency: "ETH"
+                    text: "Love your content"
+                    audio_url: "https://example.com/audio.mp3"
+                    image_url: "https://example.com/image.png"
+                    duration_ms: 3000
+                    layout: "full"
+                    channel: "gaming_channel"
+                    created_at: "2025-10-25T16:45:00Z"
+        '401':
+          description: Unauthorized - Invalid or missing JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "jwt is not found or api middleware is failed"
+                top_single_donations: []
+                top_volume_donations: []
+                top_frequent_donations: []
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "failed to query top single donations: database connection error"
+
+
 components:
   securitySchemes:
     BearerAuth:
@@ -450,6 +573,28 @@ components:
       bearerFormat: JWT
       description: JWT token obtained from /api/verify-signature endpoint
   schemas:
+    DonationsAnalyticsResponse:
+      type: object
+      required:
+        - top_single_donations
+        - top_volume_donations
+        - top_frequent_donations
+      properties:
+        top_single_donations:
+          type: array
+          description: Top 10 individual donations by amount
+          items:
+            $ref: '#/components/schemas/DonationHistoryItem'
+        top_volume_donations:
+          type: array
+          description: Top 10 donors by total volume (sum of all donations from each sender)
+          items:
+            $ref: '#/components/schemas/DonationHistoryItem'
+        top_frequent_donations:
+          type: array
+          description: Top 10 donors by frequency (number of donations from each sender)
+          items:
+            $ref: '#/components/schemas/DonationHistoryItem'
     UpdateDefaultObsSettingsRequest:
       type: object
       properties:
@@ -549,13 +694,14 @@ components:
     DonationRequest:
       type: object
       required:
-        - wallet
+        - receiver
+        - sender_username
       properties:
-        wallet:
+        receiver:
           type: string
           description: The recipient's Solana wallet address (must be registered)
           example: "9aUz8p4FtFkq3rZ7KxYmN2wQvP3jL5tR6sE1hB7cD4fG"
-        username:
+        sender_username:
           type: string
           description: The donor's username to display
           minLength: 1
@@ -742,8 +888,8 @@ components:
     DonationHistoryItem:
       type: object
       required:
+        - receiver_address
         - donation_amount
-        - sender_address
         - sender_username
         - currency
         - text
@@ -757,10 +903,6 @@ components:
           type: string
           description: The donation amount as a string
           example: "2.5"
-        sender_address:
-          type: string
-          description: The sender's wallet address
-          example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
         sender_username:
           type: string
           description: The sender's username
@@ -828,7 +970,11 @@ components:
 
     PublicUserInfo:
       type: object
+      required:
+        - wallet
       properties:
+        wallet:
+          type: string
         username:
           type: string
           nullable: true
@@ -860,6 +1006,27 @@ components:
             media_widget_url:
               type: string
               nullable: true
+
+    GetAlertSettingsResponse:
+      type: object
+      properties:
+        default_notification_sound:
+          type: string
+          description: The default notification sound identifier
+          example: "chime"
+          nullable: true
+        default_alert_image:
+          type: string
+          format: uri
+          description: URL to the default alert image
+          example: "https://images.example.com/default-alert.png"
+          nullable: true
+        default_alert_duration:
+          type: integer
+          format: int64
+          description: Default duration in milliseconds for alert display
+          example: 5000
+          nullable: true
 
     Error:
       type: object

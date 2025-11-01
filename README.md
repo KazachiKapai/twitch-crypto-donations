@@ -1,3 +1,13 @@
+# KapachiPay: Decentralized P2P Donation Platform for Content Creators
+
+Frontend: https://github.com/KazachiKapai/kapachi-pay-ui
+
+Obs Service Api: https://github.com/KazachiKapai/obs_crypto_alerts
+
+Audio Service Api: https://github.com/KazachiKapai/audio-service
+
+Website: https://kapachipay.xyz/
+
 # Twitch Crypto Donations API
 
 This repository contains the backend API for a Twitch donation service that leverages the Solana blockchain for payments. It provides a secure and efficient way for streamers to receive cryptocurrency donations, with OBS integration for real-time, on-stream alerts.
